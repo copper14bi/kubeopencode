@@ -1,0 +1,318 @@
+# Copyright Contributors to the KubeOpenCode project
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: "1.25"
+  IMG_REGISTRY: quay.io
+  IMG_ORG: kubeopencode
+
+jobs:
+  # Extract version from tag
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  # Verify Chart.yaml appVersion matches the tag
+  verify-versions:
+    name: Verify Versions
+    runs-on: ubuntu-latest
+    needs: [prepare]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Verify Chart.yaml appVersion matches tag
+        run: |
+          CHART_APP_VERSION=$(grep '^appVersion:' charts/kubeopencode/Chart.yaml | sed 's/appVersion: *"\?\([^"]*\)"\?/\1/')
+          EXPECTED_VERSION=${{ needs.prepare.outputs.tag }}
+          if [ "$CHART_APP_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "ERROR: Chart.yaml appVersion ($CHART_APP_VERSION) does not match tag ($EXPECTED_VERSION)"
+            exit 1
+          fi
+          echo "Chart.yaml appVersion matches tag: $CHART_APP_VERSION"
+
+  # Run all tests
+  unit-test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install UI dependencies
+        run: cd ui && npm install
+
+      - name: Run UI tests
+        run: make ui-test
+
+      - name: Build UI
+        run: make ui-build
+
+      - name: Run unit tests
+        run: make test
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run integration tests
+        run: make integration-test
+
+  e2e-test:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Build UI
+        run: |
+          cd ui && npm install && npm run build
+
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Run e2e tests
+        run: make e2e
+
+  # Build and push kubeopencode image
+  build-kubeopencode:
+    name: Build KubeOpenCode
+    runs-on: ubuntu-latest
+    needs: [prepare, verify-versions, unit-test, integration-test, e2e-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Build UI
+        run: |
+          cd ui && npm install && npm run build
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_ROBOT_ACCOUNT }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Build and push kubeopencode
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+          tags: |
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode:${{ needs.prepare.outputs.tag }}
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode:latest
+
+  # Build and push opencode agent
+  build-agent-opencode:
+    name: Build Agent OpenCode
+    runs-on: ubuntu-latest
+    needs: [prepare, verify-versions, unit-test, integration-test, e2e-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_ROBOT_ACCOUNT }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Build and push opencode agent
+        uses: docker/build-push-action@v6
+        with:
+          context: ./agents/opencode
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-opencode:${{ needs.prepare.outputs.tag }}
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-opencode:latest
+
+  # Build and push devbox agent
+  build-agent-devbox:
+    name: Build Agent Devbox
+    runs-on: ubuntu-latest
+    needs: [prepare, verify-versions, unit-test, integration-test, e2e-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_ROBOT_ACCOUNT }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Build and push devbox agent
+        uses: docker/build-push-action@v6
+        with:
+          context: ./agents/devbox
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-devbox:${{ needs.prepare.outputs.tag }}
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-devbox:latest
+
+  # Build and push attach agent (depends on opencode agent for COPY --from)
+  build-agent-attach:
+    name: Build Agent Attach
+    runs-on: ubuntu-latest
+    needs: [prepare, build-agent-opencode]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_ROBOT_ACCOUNT }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Build and push attach agent
+        uses: docker/build-push-action@v6
+        with:
+          context: ./agents/attach
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-attach:${{ needs.prepare.outputs.tag }}
+            ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-attach:latest
+
+  # Push Helm chart
+  push-helm-chart:
+    name: Push Helm Chart
+    runs-on: ubuntu-latest
+    needs: [prepare, build-kubeopencode]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Login to Helm registry
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | helm registry login quay.io -u ${{ secrets.QUAY_ROBOT_ACCOUNT }} --password-stdin
+
+      - name: Package and push Helm chart
+        run: |
+          mkdir -p dist
+          helm package charts/kubeopencode -d dist/
+          helm push dist/kubeopencode-*.tgz oci://quay.io/kubeopencode/helm-charts
+
+  # Create GitHub Release
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-kubeopencode
+      - build-agent-opencode
+      - build-agent-devbox
+      - build-agent-attach
+      - push-helm-chart
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ needs.prepare.outputs.tag }} \
+            --title "KubeOpenCode ${{ needs.prepare.outputs.tag }}" \
+            --generate-notes

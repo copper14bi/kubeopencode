@@ -2,6 +2,7 @@
 FROM golang:1.26-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
@@ -22,7 +23,7 @@ COPY ui/ ui/
 # Build the unified kubeopencode binary with all subcommands
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
     -mod=vendor \
-    -ldflags="-s -w" \
+    -ldflags="-s -w -X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildDate=${BUILD_TIME}" \
     -a \
     -o kubeopencode \
     ./cmd/kubeopencode/

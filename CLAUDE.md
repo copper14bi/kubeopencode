@@ -875,6 +875,7 @@ The controller requires permissions for:
 | `deploy/local-dev/local-development.md` | Local development environment setup | Development workflow changes |
 | `charts/kubeopencode/README.md` | Helm chart deployment and configuration | Helm values changes |
 | `agents/README.md` | Building custom agent images | Agent development changes |
+| `docs/releasing.md` | Release SOP — step-by-step guide for creating a new release | Release process changes |
 | `docs/adr/` | Architecture Decision Records | Significant architectural decisions |
 
 ### Updating Documentation
@@ -971,7 +972,7 @@ kubectl logs <pod-name> -n kubeopencode-system
 
 ## Project Status
 
-- **Version**: v0.1.0
+- **Version**: v0.0.1
 - **API Stability**: v1alpha1 (subject to change)
 - **License**: Apache License 2.0
 - **Maintainer**: kubeopencode/kubeopencode team

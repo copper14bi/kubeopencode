@@ -5,7 +5,7 @@ all: build
 .PHONY: all
 
 # Version information
-VERSION ?= latest
+VERSION ?= 0.0.1
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
@@ -88,7 +88,7 @@ update-crds: controller-gen
 
 # Build unified kubeopencode binary
 build:
-	go build -o bin/kubeopencode ./cmd/kubeopencode
+	go build -ldflags '$(GO_LD_FLAGS)' -o bin/kubeopencode ./cmd/kubeopencode
 .PHONY: build
 
 # Test runs unit tests only.
@@ -136,7 +136,7 @@ verify: check-env
 
 # Build the docker image (includes UI build)
 docker-build: ui-build
-	docker build --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg BUILD_TIME=$(BUILD_DATE) -t $(IMG) .
+	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg BUILD_TIME=$(BUILD_DATE) -t $(IMG) .
 .PHONY: docker-build
 
 # Push the docker image
@@ -149,6 +149,7 @@ docker-buildx: ui-build
 	docker buildx create --use --name=kubeopencode-builder || true
 	docker buildx build \
 		--platform=$(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_DATE) \
 		--tag $(IMG) \

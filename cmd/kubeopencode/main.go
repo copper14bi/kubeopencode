@@ -17,6 +17,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version information set via ldflags at build time.
+var (
+	Version   = "dev"
+	GitCommit = "unknown"
+	BuildDate = "unknown"
+)
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("kubeopencode version %s\n", Version)
+		fmt.Printf("  git commit: %s\n", GitCommit)
+		fmt.Printf("  build date: %s\n", BuildDate)
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(versionCmd)
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "kubeopencode",
 	Short: "KubeOpenCode - Kubernetes-native AI task execution",
