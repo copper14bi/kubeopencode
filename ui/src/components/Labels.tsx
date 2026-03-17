@@ -15,15 +15,15 @@ function Labels({ labels, maxDisplay }: LabelsProps) {
       {displayEntries.map(([key, value]) => (
         <span
           key={key}
-          className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700"
+          className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] bg-stone-50 text-stone-600 border border-stone-200"
           title={`${key}=${value}`}
         >
-          <span className="text-gray-500">{key}=</span>
+          <span className="text-stone-400">{key}=</span>
           <span>{value}</span>
         </span>
       ))}
       {remaining > 0 && (
-        <span className="text-xs text-gray-500">+{remaining} more</span>
+        <span className="text-[11px] text-stone-400 self-center">+{remaining}</span>
       )}
     </div>
   );

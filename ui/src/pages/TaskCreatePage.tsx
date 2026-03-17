@@ -24,7 +24,6 @@ function TaskCreatePage() {
     queryFn: () => api.listAllAgents(),
   });
 
-  // Query for rerun task data
   const rerunTaskName = searchParams.get('rerun');
   const rerunNamespace = searchParams.get('namespace') || 'default';
   const { data: rerunTask } = useQuery({
@@ -33,7 +32,6 @@ function TaskCreatePage() {
     enabled: !!rerunTaskName,
   });
 
-  // Parse query params for pre-selection
   useEffect(() => {
     const namespaceParam = searchParams.get('namespace');
     if (namespaceParam) {
@@ -45,7 +43,6 @@ function TaskCreatePage() {
     }
   }, [searchParams]);
 
-  // Pre-fill from rerun task
   useEffect(() => {
     if (rerunTask) {
       if (rerunTask.description) {
@@ -58,13 +55,11 @@ function TaskCreatePage() {
     }
   }, [rerunTask]);
 
-  // Filter agents to same namespace
   const availableAgents = useMemo(() => {
     if (!agentsData?.agents) return [];
     return agentsData.agents.filter((agent) => agent.namespace === namespace);
   }, [agentsData?.agents, namespace]);
 
-  // Reset selected agent if it's no longer available for the new namespace
   const handleNamespaceChange = (newNamespace: string) => {
     setNamespace(newNamespace);
     if (selectedAgent) {
@@ -115,28 +110,27 @@ function TaskCreatePage() {
     createMutation.mutate(task);
   };
 
-  // Determine if form is valid
   const isValid = description && selectedAgent;
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <Breadcrumbs items={[
         { label: 'Tasks', to: `/tasks?namespace=${namespace}` },
         { label: 'Create Task' },
       ]} />
 
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900">Create Task</h2>
-          <p className="text-sm text-gray-500">Create a new AI agent task</p>
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm max-w-3xl">
+        <div className="px-6 py-5 border-b border-stone-100">
+          <h2 className="font-display text-xl font-bold text-stone-900">Create Task</h2>
+          <p className="text-sm text-stone-400 mt-0.5">Create a new AI agent task</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label
                 htmlFor="namespace"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
               >
                 Namespace
               </label>
@@ -144,7 +138,7 @@ function TaskCreatePage() {
                 id="namespace"
                 value={namespace}
                 onChange={(e) => handleNamespaceChange(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                className="block w-full rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
               >
                 {namespacesData?.namespaces.map((ns) => (
                   <option key={ns} value={ns}>
@@ -157,9 +151,9 @@ function TaskCreatePage() {
             <div>
               <label
                 htmlFor="name"
-                className="block text-sm font-medium text-gray-700"
+                className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
               >
-                Name (optional)
+                Name <span className="normal-case tracking-normal text-stone-300">(optional)</span>
               </label>
               <input
                 type="text"
@@ -167,7 +161,7 @@ function TaskCreatePage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Auto-generated if empty"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                className="block w-full rounded-lg border-stone-200 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700 placeholder:text-stone-300"
               />
             </div>
           </div>
@@ -175,7 +169,7 @@ function TaskCreatePage() {
           <div>
             <label
               htmlFor="agent"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
             >
               Agent
             </label>
@@ -184,7 +178,7 @@ function TaskCreatePage() {
               value={selectedAgent}
               onChange={(e) => setSelectedAgent(e.target.value)}
               required
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              className="block w-full rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
             >
               <option value="">
                 {availableAgents.length === 0
@@ -200,53 +194,53 @@ function TaskCreatePage() {
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1.5 text-xs text-stone-400">
               {availableAgents.length === 0
-                ? 'No agents available for this namespace. Contact your administrator.'
-                : `${availableAgents.length} agent${availableAgents.length !== 1 ? 's' : ''} available for this namespace`}
+                ? 'No agents available for this namespace.'
+                : `${availableAgents.length} agent${availableAgents.length !== 1 ? 's' : ''} available`}
             </p>
           </div>
 
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
             >
-              Description / Task Prompt
+              Task Prompt
             </label>
             <textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={10}
+              rows={12}
               required
               placeholder="Describe what you want the AI agent to do..."
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm font-mono"
+              className="block w-full rounded-lg border-stone-200 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700 font-mono placeholder:text-stone-300 placeholder:font-body"
             />
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1.5 text-xs text-stone-400">
               This will be the main instruction for the AI agent
             </p>
           </div>
 
           {createMutation.isError && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800">
-                Error: {(createMutation.error as Error).message}
+              <p className="text-red-700 text-sm">
+                {(createMutation.error as Error).message}
               </p>
             </div>
           )}
 
-          <div className="flex justify-end space-x-4">
+          <div className="flex justify-end space-x-3 pt-2">
             <Link
               to={`/tasks?namespace=${namespace}`}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2.5 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 transition-colors"
             >
               Cancel
             </Link>
             <button
               type="submit"
               disabled={createMutation.isPending || !isValid}
-              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2.5 text-sm font-medium text-white bg-stone-900 rounded-lg hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {createMutation.isPending ? 'Creating...' : 'Create Task'}
             </button>

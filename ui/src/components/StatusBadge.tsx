@@ -7,50 +7,28 @@ interface StatusBadgeProps {
 function StatusBadge({ phase }: StatusBadgeProps) {
   const lowerPhase = phase.toLowerCase();
 
-  const getStatusClass = () => {
-    switch (lowerPhase) {
-      case 'pending':
-        return 'bg-gray-100 text-gray-800';
-      case 'queued':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'running':
-        return 'bg-blue-100 text-blue-800';
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const styles: Record<string, { bg: string; text: string; dot: string; border: string }> = {
+    pending: { bg: 'bg-stone-50', text: 'text-stone-600', dot: 'bg-stone-400', border: 'border-stone-200' },
+    queued: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-400', border: 'border-amber-200' },
+    running: { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-400', border: 'border-sky-200' },
+    completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-400', border: 'border-emerald-200' },
+    failed: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-400', border: 'border-red-200' },
   };
 
-  const getDotClass = () => {
-    switch (lowerPhase) {
-      case 'running':
-        return 'bg-blue-500';
-      case 'queued':
-        return 'bg-yellow-500';
-      default:
-        return '';
-    }
-  };
-
+  const style = styles[lowerPhase] || styles.pending;
   const isActive = lowerPhase === 'running' || lowerPhase === 'queued';
-  const dotClass = getDotClass();
 
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusClass()}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${style.bg} ${style.text} ${style.border}`}
     >
-      {isActive && (
-        <span className="relative mr-1.5 flex h-2 w-2">
-          <span
-            className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${dotClass}`}
-          />
-          <span
-            className={`relative inline-flex rounded-full h-2 w-2 ${dotClass}`}
-          />
+      {isActive ? (
+        <span className="relative mr-1.5 flex h-1.5 w-1.5">
+          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${style.dot}`} />
+          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${style.dot}`} />
         </span>
+      ) : (
+        <span className={`mr-1.5 inline-flex rounded-full h-1.5 w-1.5 ${style.dot}`} />
       )}
       {phase}
     </span>

@@ -13,14 +13,14 @@ describe('DashboardPage', () => {
   it('renders the dashboard heading and new task link', () => {
     renderWithProviders(<DashboardPage />, { initialEntries: ['/'] });
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('+ New Task')).toBeInTheDocument();
+    expect(screen.getByText('New Task')).toBeInTheDocument();
   });
 
   it('renders stat cards with data from API', async () => {
     renderWithProviders(<DashboardPage />, { initialEntries: ['/'] });
 
     await waitFor(() => {
-      expect(screen.getByText('Total Tasks')).toBeInTheDocument();
+      expect(screen.getByText('Total')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Running')).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe('DashboardPage', () => {
       expect(screen.getByText(/No tasks yet/)).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Create one')).toBeInTheDocument();
+    expect(screen.getByText('Create your first task')).toBeInTheDocument();
   });
 
   it('shows empty state when no agents exist', async () => {

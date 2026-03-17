@@ -19,10 +19,10 @@ function YamlViewer({ queryKey, fetchYaml }: YamlViewerProps) {
     <div className="mt-6">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 text-sm font-medium text-gray-600 hover:text-gray-900"
+        className="flex items-center space-x-2 text-xs font-display font-medium text-stone-400 hover:text-stone-600 uppercase tracking-wider transition-colors"
       >
         <svg
-          className={`w-4 h-4 transform transition-transform ${isOpen ? 'rotate-90' : ''}`}
+          className={`w-3.5 h-3.5 transform transition-transform ${isOpen ? 'rotate-90' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -32,25 +32,25 @@ function YamlViewer({ queryKey, fetchYaml }: YamlViewerProps) {
         <span>YAML</span>
       </button>
       {isOpen && (
-        <div className="mt-2 bg-gray-900 rounded-lg overflow-hidden">
-          <div className="px-4 py-2 bg-gray-800 flex items-center justify-between">
-            <span className="text-sm text-gray-300">Resource Definition</span>
+        <div className="mt-2 bg-stone-900 rounded-xl overflow-hidden border border-stone-800 animate-fade-in">
+          <div className="px-4 py-2.5 bg-stone-800/50 flex items-center justify-between border-b border-stone-700/50">
+            <span className="text-xs text-stone-400 font-display">Resource Definition</span>
             {yaml && (
               <button
                 onClick={() => navigator.clipboard.writeText(yaml)}
-                className="text-xs text-gray-400 hover:text-gray-200"
+                className="text-[11px] text-stone-500 hover:text-stone-300 transition-colors font-medium"
               >
                 Copy
               </button>
             )}
           </div>
-          <div className="p-4 max-h-96 overflow-y-auto">
+          <div className="p-4 max-h-96 overflow-y-auto sidebar-scroll">
             {isLoading ? (
-              <span className="text-gray-500 text-sm">Loading...</span>
+              <span className="text-stone-500 text-sm">Loading...</span>
             ) : error ? (
               <span className="text-red-400 text-sm">Error: {(error as Error).message}</span>
             ) : (
-              <pre className="text-sm text-gray-100 font-mono whitespace-pre">{yaml}</pre>
+              <pre className="text-xs text-stone-300 font-mono whitespace-pre leading-relaxed">{yaml}</pre>
             )}
           </div>
         </div>

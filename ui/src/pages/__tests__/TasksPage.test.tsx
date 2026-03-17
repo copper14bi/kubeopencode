@@ -157,7 +157,8 @@ describe('TasksPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Showing/)).toBeInTheDocument();
+      // Pagination uses "X - Y of Z" format with numbers in separate spans
+      expect(screen.getByText('Prev')).toBeInTheDocument();
     });
   });
 

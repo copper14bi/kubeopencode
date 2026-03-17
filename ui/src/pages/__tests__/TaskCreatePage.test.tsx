@@ -19,7 +19,7 @@ describe('TaskCreatePage', () => {
     expect(screen.getByRole('heading', { name: 'Create Task' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Namespace/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Name \(optional\)/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Description/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Task Prompt/)).toBeInTheDocument();
   });
 
   it('loads namespaces from API', async () => {
@@ -85,7 +85,7 @@ describe('TaskCreatePage', () => {
     });
 
     // Fill description
-    const descriptionInput = screen.getByLabelText(/Description/);
+    const descriptionInput = screen.getByLabelText(/Task Prompt/);
     await user.type(descriptionInput, 'Fix the login bug');
 
     // Select an agent
@@ -122,7 +122,7 @@ describe('TaskCreatePage', () => {
 
     // Fill form
     await user.type(screen.getByLabelText(/Name \(optional\)/), 'my-task');
-    await user.type(screen.getByLabelText(/Description/), 'Fix the bug');
+    await user.type(screen.getByLabelText(/Task Prompt/), 'Fix the bug');
     await user.selectOptions(screen.getByLabelText(/^Agent/), 'default/opencode-agent');
 
     // Submit
@@ -153,7 +153,7 @@ describe('TaskCreatePage', () => {
       expect(screen.getByText(/agents? available/)).toBeInTheDocument();
     });
 
-    await user.type(screen.getByLabelText(/Description/), 'Test');
+    await user.type(screen.getByLabelText(/Task Prompt/), 'Test');
     await user.selectOptions(screen.getByLabelText(/^Agent/), 'default/opencode-agent');
     await user.click(screen.getByRole('button', { name: 'Create Task' }));
 

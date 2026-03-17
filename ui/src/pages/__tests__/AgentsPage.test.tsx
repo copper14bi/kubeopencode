@@ -45,12 +45,15 @@ describe('AgentsPage', () => {
     expect(credentialLabels.length).toBeGreaterThan(0);
   });
 
-  it('shows maxConcurrentTasks badge when set', async () => {
+  it('shows maxConcurrentTasks when set', async () => {
     renderWithProviders(<AgentsPage />, { initialEntries: ['/agents'] });
 
     await waitFor(() => {
-      expect(screen.getByText('Max 5')).toBeInTheDocument();
+      expect(screen.getByText('Concurrency')).toBeInTheDocument();
     });
+
+    // The concurrency value is displayed as a separate element
+    expect(screen.getByText('5')).toBeInTheDocument();
   });
 
   it('renders agent cards as links to detail pages', async () => {

@@ -53,12 +53,11 @@ function TaskDetailPage() {
     return <DetailSkeleton />;
   }
 
-  // If delete is in progress or succeeded, don't show error - navigation will happen
   if (deleteMutation.isPending || deleteMutation.isSuccess) {
     return (
-      <div className="text-center py-12">
-        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-primary-600"></div>
-        <p className="mt-4 text-gray-500">Deleting task...</p>
+      <div className="text-center py-16">
+        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-stone-200 border-t-stone-600"></div>
+        <p className="mt-3 text-sm text-stone-400">Deleting task...</p>
       </div>
     );
   }
@@ -67,18 +66,18 @@ function TaskDetailPage() {
     const errorMessage = (error as Error)?.message || 'Not found';
     const isNotFound = errorMessage.includes('not found');
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <h3 className="text-lg font-medium text-red-800 mb-2">
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 animate-fade-in">
+        <h3 className="font-display text-base font-semibold text-red-800 mb-2">
           {isNotFound ? 'Task Not Found' : 'Error Loading Task'}
         </h3>
-        <p className="text-red-700 mb-4">
+        <p className="text-sm text-red-600 mb-4">
           {isNotFound
-            ? `The task "${name}" in namespace "${namespace}" does not exist. It may have been deleted.`
+            ? `The task "${name}" in namespace "${namespace}" does not exist.`
             : errorMessage}
         </p>
         <Link
           to={`/tasks?namespace=${namespace}`}
-          className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200"
+          className="inline-flex items-center px-4 py-2 text-sm font-medium text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"
         >
           Back to Tasks
         </Link>
@@ -87,93 +86,93 @@ function TaskDetailPage() {
   }
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <Breadcrumbs items={[
         { label: 'Tasks', to: `/tasks?namespace=${namespace}` },
         { label: namespace!, to: `/tasks?namespace=${namespace}` },
         { label: name! },
       ]} />
 
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
+        <div className="px-6 py-5 border-b border-stone-100">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{task.name}</h2>
-              <p className="text-sm text-gray-500">{task.namespace}</p>
+              <h2 className="font-display text-xl font-bold text-stone-900">{task.name}</h2>
+              <p className="text-sm text-stone-400 mt-0.5 font-mono text-xs">{task.namespace}</p>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
               <StatusBadge phase={task.phase || 'Pending'} />
               {task.phase === 'Running' && (
                 <button
                   onClick={() => stopMutation.mutate()}
                   disabled={stopMutation.isPending}
-                  className="px-3 py-1 text-sm font-medium text-yellow-700 bg-yellow-100 rounded-md hover:bg-yellow-200"
+                  className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
                 >
                   {stopMutation.isPending ? 'Stopping...' : 'Stop'}
                 </button>
               )}
               <Link
                 to={`/tasks/create?namespace=${namespace}&rerun=${name}`}
-                className="px-3 py-1 text-sm font-medium text-primary-700 bg-primary-100 rounded-md hover:bg-primary-200"
+                className="px-3 py-1.5 text-xs font-medium text-stone-600 bg-stone-50 border border-stone-200 rounded-lg hover:bg-stone-100 transition-colors"
               >
                 Rerun
               </Link>
               <button
                 onClick={() => setShowDeleteDialog(true)}
                 disabled={deleteMutation.isPending}
-                className="px-3 py-1 text-sm font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200"
+                className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
               >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                Delete
               </button>
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="px-6 py-5 space-y-5">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <div>
-              <dt className="text-sm font-medium text-gray-500">Agent</dt>
-              <dd className="mt-1 text-sm text-gray-900">
+              <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">Agent</dt>
+              <dd className="mt-1.5 text-sm text-stone-800">
                 {task.agentRef ? (
                   <Link
                     to={`/agents/${task.namespace}/${task.agentRef.name}`}
-                    className="text-primary-600 hover:text-primary-800"
+                    className="text-stone-800 hover:text-primary-600 transition-colors font-mono text-xs"
                   >
                     {task.agentRef.name}
                   </Link>
                 ) : (
-                  'default'
+                  <span className="font-mono text-xs">default</span>
                 )}
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500">Duration</dt>
-              <dd className="mt-1 text-sm text-gray-900">{task.duration || '-'}</dd>
+              <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">Duration</dt>
+              <dd className="mt-1.5 text-sm text-stone-800 font-mono text-xs">{task.duration || '-'}</dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500">Start Time</dt>
-              <dd className="mt-1 text-sm text-gray-900">
+              <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">Start Time</dt>
+              <dd className="mt-1.5 text-sm text-stone-800">
                 {task.startTime ? <TimeAgo date={task.startTime} /> : '-'}
               </dd>
             </div>
             <div>
-              <dt className="text-sm font-medium text-gray-500">Completion Time</dt>
-              <dd className="mt-1 text-sm text-gray-900">
+              <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">Completion</dt>
+              <dd className="mt-1.5 text-sm text-stone-800">
                 {task.completionTime ? <TimeAgo date={task.completionTime} /> : '-'}
               </dd>
             </div>
             {task.podName && (
               <div>
-                <dt className="text-sm font-medium text-gray-500">Pod</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">Pod</dt>
+                <dd className="mt-1.5 text-sm text-stone-800 font-mono text-xs">
                   {task.namespace}/{task.podName}
                 </dd>
               </div>
             )}
             {task.labels && Object.keys(task.labels).length > 0 && (
               <div className="col-span-2">
-                <dt className="text-sm font-medium text-gray-500">Labels</dt>
-                <dd className="mt-1">
+                <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">Labels</dt>
+                <dd className="mt-1.5">
                   <Labels labels={task.labels} />
                 </dd>
               </div>
@@ -182,36 +181,36 @@ function TaskDetailPage() {
 
           {task.description && (
             <div>
-              <dt className="text-sm font-medium text-gray-500 mb-2">Description</dt>
-              <dd className="bg-gray-50 rounded-md p-4">
-                <pre className="text-sm text-gray-900 whitespace-pre-wrap">{task.description}</pre>
+              <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-2">Description</dt>
+              <dd className="bg-stone-50 rounded-lg p-4 border border-stone-100">
+                <pre className="text-sm text-stone-700 whitespace-pre-wrap font-body leading-relaxed">{task.description}</pre>
               </dd>
             </div>
           )}
 
           {task.conditions && task.conditions.length > 0 && (
             <div>
-              <dt className="text-sm font-medium text-gray-500 mb-2">Conditions</dt>
+              <dt className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-2">Conditions</dt>
               <dd className="space-y-2">
                 {task.conditions.map((condition, idx) => (
-                  <div key={idx} className="bg-gray-50 rounded-md p-3">
+                  <div key={idx} className="bg-stone-50 rounded-lg p-3 border border-stone-100">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900">{condition.type}</span>
+                      <span className="font-medium text-sm text-stone-800">{condition.type}</span>
                       <span
-                        className={`text-xs px-2 py-1 rounded ${
+                        className={`text-[11px] px-2 py-0.5 rounded-md border font-medium ${
                           condition.status === 'True'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-stone-50 text-stone-500 border-stone-200'
                         }`}
                       >
                         {condition.status}
                       </span>
                     </div>
                     {condition.reason && (
-                      <p className="text-sm text-gray-600 mt-1">Reason: {condition.reason}</p>
+                      <p className="text-xs text-stone-500 mt-1">Reason: {condition.reason}</p>
                     )}
                     {condition.message && (
-                      <p className="text-sm text-gray-500 mt-1">{condition.message}</p>
+                      <p className="text-xs text-stone-400 mt-1">{condition.message}</p>
                     )}
                   </div>
                 ))}
@@ -226,7 +225,6 @@ function TaskDetailPage() {
         fetchYaml={() => api.getTaskYaml(namespace!, name!)}
       />
 
-      {/* Log Viewer - show when task has a pod */}
       {(task.phase === 'Running' || task.phase === 'Completed' || task.phase === 'Failed') && (
         <div className="mt-6">
           <LogViewer

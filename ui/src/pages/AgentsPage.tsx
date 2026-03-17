@@ -11,7 +11,6 @@ import { getNamespaceCookie, setNamespaceCookie } from '../utils/cookies';
 const PAGE_SIZE = 12;
 
 function AgentsPage() {
-  // Initialize from cookie, empty string means "All Namespaces"
   const [selectedNamespace, setSelectedNamespace] = useState<string>(() => {
     return getNamespaceCookie() || '';
   });
@@ -25,7 +24,6 @@ function AgentsPage() {
     }
   };
 
-  // Reset to page 1 when namespace or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedNamespace, filters.name, filters.labelSelector]);
@@ -52,11 +50,11 @@ function AgentsPage() {
   });
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Agents</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <h2 className="font-display text-2xl font-bold text-stone-900 tracking-tight">Agents</h2>
+          <p className="mt-1 text-sm text-stone-500">
             Browse available AI agents for task execution
           </p>
         </div>
@@ -64,7 +62,7 @@ function AgentsPage() {
           <select
             value={selectedNamespace}
             onChange={(e) => handleNamespaceChange(e.target.value)}
-            className="block w-full sm:w-48 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            className="block w-full sm:w-48 rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
           >
             <option value="">All Namespaces</option>
             {namespacesData?.namespaces.map((ns) => (
@@ -76,7 +74,6 @@ function AgentsPage() {
         </div>
       </div>
 
-      {/* Filter bar */}
       <div className="mb-4">
         <ResourceFilter
           filters={filters}
@@ -86,32 +83,32 @@ function AgentsPage() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-white shadow-sm rounded-lg p-6">
+            <div key={i} className="bg-white rounded-xl border border-stone-200 p-5">
               <Skeleton className="h-5 w-32 mb-2" />
-              <Skeleton className="h-4 w-20 mb-4" />
-              <Skeleton className="h-4 w-full mb-2" />
-              <Skeleton className="h-4 w-full mb-2" />
-              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-20 mb-4" />
+              <Skeleton className="h-3 w-full mb-2" />
+              <Skeleton className="h-3 w-full mb-2" />
+              <Skeleton className="h-3 w-3/4" />
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">Error loading agents: {(error as Error).message}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+          <p className="text-red-700 text-sm">Error loading agents: {(error as Error).message}</p>
           <button
             onClick={() => refetch()}
-            className="mt-2 text-sm text-red-600 hover:text-red-800"
+            className="mt-2 text-sm text-red-600 hover:text-red-800 font-medium"
           >
             Retry
           </button>
         </div>
       ) : (
         <>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {data?.agents.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-gray-500">
+            <div className="col-span-full text-center py-16 text-stone-400 text-sm">
               No agents found. Agents are created by platform administrators.
             </div>
           ) : (
@@ -119,40 +116,48 @@ function AgentsPage() {
               <Link
                 key={`${agent.namespace}/${agent.name}`}
                 to={`/agents/${agent.namespace}/${agent.name}`}
-                className="bg-white shadow-sm rounded-lg overflow-hidden hover:shadow-md transition-shadow"
+                className="bg-white rounded-xl border border-stone-200 overflow-hidden hover:border-stone-300 hover:shadow-md transition-all group"
               >
-                <div className="p-6">
+                <div className="p-5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="text-lg font-medium text-gray-900">
+                      <h3 className="text-sm font-semibold text-stone-800 group-hover:text-stone-900">
                         {agent.name}
                       </h3>
-                      <p className="text-sm text-gray-500">{agent.namespace}</p>
+                      <p className="text-xs text-stone-400 mt-0.5 font-mono">{agent.namespace}</p>
                     </div>
-                    {agent.maxConcurrentTasks && (
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                        Max {agent.maxConcurrentTasks}
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-medium border ${
+                      agent.mode === 'Server'
+                        ? 'bg-violet-50 text-violet-600 border-violet-200'
+                        : 'bg-stone-50 text-stone-400 border-stone-200'
+                    }`}>
+                      {agent.mode}
+                    </span>
                   </div>
 
                   {agent.profile && (
-                    <p className="mt-2 text-sm text-gray-600 line-clamp-2">{agent.profile}</p>
+                    <p className="mt-2.5 text-xs text-stone-500 line-clamp-2 leading-relaxed">{agent.profile}</p>
                   )}
 
-                  <div className="mt-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Contexts</span>
-                      <span className="text-gray-900">{agent.contextsCount}</span>
+                  <div className="mt-4 space-y-1.5">
+                    {agent.maxConcurrentTasks && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-stone-400">Concurrency</span>
+                        <span className="text-stone-600 font-mono">{agent.maxConcurrentTasks}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-stone-400">Contexts</span>
+                      <span className="text-stone-600 font-mono">{agent.contextsCount}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Credentials</span>
-                      <span className="text-gray-900">{agent.credentialsCount}</span>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-stone-400">Credentials</span>
+                      <span className="text-stone-600 font-mono">{agent.credentialsCount}</span>
                     </div>
                     {agent.workspaceDir && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Workspace</span>
-                        <span className="text-gray-900 font-mono text-xs">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-stone-400">Workspace</span>
+                        <span className="text-stone-600 font-mono text-[11px] truncate max-w-[140px]">
                           {agent.workspaceDir}
                         </span>
                       </div>
@@ -160,44 +165,40 @@ function AgentsPage() {
                   </div>
 
                   {agent.labels && Object.keys(agent.labels).length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-xs text-gray-500 mb-1">Labels:</p>
+                    <div className="mt-4 pt-3 border-t border-stone-100">
                       <Labels labels={agent.labels} maxDisplay={3} />
                     </div>
                   )}
-
                 </div>
               </Link>
             ))
           )}
         </div>
 
-        {/* Pagination Controls */}
+        {/* Pagination */}
         {data?.pagination && data.pagination.totalCount > 0 && (
           <div className="mt-6 flex items-center justify-between">
-            <p className="text-sm text-gray-700">
-              Showing{' '}
-              <span className="font-medium">{data.pagination.offset + 1}</span>
-              {' '}to{' '}
-              <span className="font-medium">
+            <p className="text-xs text-stone-400">
+              <span className="font-medium text-stone-600">{data.pagination.offset + 1}</span>
+              {' '}-{' '}
+              <span className="font-medium text-stone-600">
                 {Math.min(data.pagination.offset + data.agents.length, data.pagination.totalCount)}
               </span>
               {' '}of{' '}
-              <span className="font-medium">{data.pagination.totalCount}</span>
-              {' '}results
+              <span className="font-medium text-stone-600">{data.pagination.totalCount}</span>
             </p>
-            <div className="flex space-x-2">
+            <div className="flex space-x-1">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-xs font-medium text-stone-500 bg-stone-50 border border-stone-200 rounded-lg hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Previous
               </button>
               <button
                 onClick={() => setCurrentPage((p) => p + 1)}
                 disabled={!data.pagination.hasMore}
-                className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 text-xs font-medium text-stone-500 bg-stone-50 border border-stone-200 rounded-lg hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Next
               </button>

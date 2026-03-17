@@ -16,7 +16,6 @@ const PHASE_OPTIONS = ['', 'Pending', 'Queued', 'Running', 'Completed', 'Failed'
 
 function TasksPage() {
   const [searchParams] = useSearchParams();
-  // Initialize namespace: URL param > cookie > default
   const [namespace, setNamespace] = useState(() => {
     const urlParam = new URLSearchParams(window.location.search).get('namespace');
     if (urlParam) return urlParam;
@@ -27,7 +26,6 @@ function TasksPage() {
   const [phaseFilter, setPhaseFilter] = useState('');
   const [filters, setFilters] = useFilterState();
 
-  // Sync namespace from URL params when they change
   useEffect(() => {
     const namespaceParam = searchParams.get('namespace');
     if (namespaceParam && namespaceParam !== namespace) {
@@ -38,7 +36,6 @@ function TasksPage() {
     }
   }, [searchParams, namespace]);
 
-  // Handler for namespace dropdown change
   const handleNamespaceChange = (newNamespace: string) => {
     setNamespace(newNamespace);
     if (newNamespace !== ALL_NAMESPACES) {
@@ -46,7 +43,6 @@ function TasksPage() {
     }
   };
 
-  // Reset to page 1 when namespace or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [namespace, phaseFilter, filters.name, filters.labelSelector]);
@@ -77,19 +73,19 @@ function TasksPage() {
   });
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Tasks</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <h2 className="font-display text-2xl font-bold text-stone-900 tracking-tight">Tasks</h2>
+          <p className="mt-1 text-sm text-stone-500">
             Manage and monitor AI agent tasks
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex items-center space-x-4">
+        <div className="mt-4 sm:mt-0 flex items-center space-x-3">
           <select
             value={namespace}
             onChange={(e) => handleNamespaceChange(e.target.value)}
-            className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            className="block w-48 rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
           >
             <option value={ALL_NAMESPACES}>All Namespaces</option>
             {namespacesData?.namespaces.map((ns) => (
@@ -100,8 +96,11 @@ function TasksPage() {
           </select>
           <Link
             to={`/tasks/create?namespace=${namespace}`}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors shadow-sm"
           >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+            </svg>
             New Task
           </Link>
         </div>
@@ -114,16 +113,15 @@ function TasksPage() {
           onFilterChange={setFilters}
           placeholder="Filter tasks by name..."
         />
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500">Phase:</span>
+        <div className="flex items-center space-x-1.5">
           {PHASE_OPTIONS.map((phase) => (
             <button
               key={phase || 'all'}
               onClick={() => setPhaseFilter(phase)}
-              className={`px-3 py-1 text-xs font-medium rounded-full border ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                 phaseFilter === phase
-                  ? 'bg-primary-100 text-primary-800 border-primary-300'
-                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  ? 'bg-stone-900 text-white border-stone-900'
+                  : 'bg-white text-stone-500 border-stone-200 hover:border-stone-300 hover:text-stone-700'
               }`}
             >
               {phase || 'All'}
@@ -133,56 +131,56 @@ function TasksPage() {
       </div>
 
       {isLoading ? (
-        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
           <TableSkeleton rows={5} cols={isAllNamespaces ? 7 : 6} />
         </div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">Error loading tasks: {(error as Error).message}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+          <p className="text-red-700 text-sm">Error loading tasks: {(error as Error).message}</p>
           <button
             onClick={() => refetch()}
-            className="mt-2 text-sm text-red-600 hover:text-red-800"
+            className="mt-2 text-sm text-red-600 hover:text-red-800 font-medium"
           >
             Retry
           </button>
         </div>
       ) : (
-        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
+          <table className="min-w-full divide-y divide-stone-100">
+            <thead className="bg-stone-50/60">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">
                   Name
                 </th>
                 {isAllNamespaces && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">
                     Namespace
                   </th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider hidden lg:table-cell">
                   Labels
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">
                   Agent
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider hidden sm:table-cell">
                   Duration
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">
                   Created
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-stone-100">
               {data?.tasks.length === 0 ? (
                 <tr>
-                  <td colSpan={isAllNamespaces ? 7 : 6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={isAllNamespaces ? 7 : 6} className="px-5 py-12 text-center text-stone-400 text-sm">
                     No tasks found.{' '}
                     {!isAllNamespaces && (
-                      <Link to={`/tasks/create?namespace=${namespace}`} className="text-primary-600 hover:text-primary-800">
+                      <Link to={`/tasks/create?namespace=${namespace}`} className="text-primary-600 hover:text-primary-700 font-medium">
                         Create your first task
                       </Link>
                     )}
@@ -190,33 +188,33 @@ function TasksPage() {
                 </tr>
               ) : (
                 data?.tasks.map((task) => (
-                  <tr key={`${task.namespace}/${task.name}`} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  <tr key={`${task.namespace}/${task.name}`} className="hover:bg-stone-50/60 transition-colors">
+                    <td className="px-5 py-3.5 whitespace-nowrap">
                       <Link
                         to={`/tasks/${task.namespace}/${task.name}`}
-                        className="text-primary-600 hover:text-primary-800 font-medium"
+                        className="text-stone-800 hover:text-primary-600 font-medium text-sm transition-colors"
                       >
                         {task.name}
                       </Link>
                     </td>
                     {isAllNamespaces && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-5 py-3.5 whitespace-nowrap text-sm text-stone-400">
                         {task.namespace}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-5 py-3.5 whitespace-nowrap">
                       <StatusBadge phase={task.phase || 'Pending'} />
                     </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
+                    <td className="px-5 py-3.5 hidden lg:table-cell">
                       <Labels labels={task.labels} maxDisplay={2} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-5 py-3.5 whitespace-nowrap text-sm text-stone-400 font-mono text-xs">
                       {task.agentRef?.name || 'default'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
+                    <td className="px-5 py-3.5 whitespace-nowrap text-sm text-stone-400 hidden sm:table-cell font-mono text-xs">
                       {task.duration || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-5 py-3.5 whitespace-nowrap text-xs text-stone-400">
                       <TimeAgo date={task.createdAt} />
                     </td>
                   </tr>
@@ -225,37 +223,35 @@ function TasksPage() {
             </tbody>
           </table>
 
-          {/* Pagination Controls */}
+          {/* Pagination */}
           {data?.pagination && data.pagination.totalCount > 0 && (
-            <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="bg-white px-5 py-3 flex items-center justify-between border-t border-stone-100">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1.5 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setCurrentPage(p => p + 1)}
                   disabled={!data.pagination.hasMore}
-                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="ml-3 px-3 py-1.5 text-sm font-medium text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                 </button>
               </div>
               <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                 <div className="flex items-center space-x-4">
-                  <p className="text-sm text-gray-700">
-                    Showing{' '}
-                    <span className="font-medium">{data.pagination.offset + 1}</span>
-                    {' '}to{' '}
-                    <span className="font-medium">
+                  <p className="text-xs text-stone-400">
+                    <span className="font-medium text-stone-600">{data.pagination.offset + 1}</span>
+                    {' '}-{' '}
+                    <span className="font-medium text-stone-600">
                       {Math.min(data.pagination.offset + data.tasks.length, data.pagination.totalCount)}
                     </span>
                     {' '}of{' '}
-                    <span className="font-medium">{data.pagination.totalCount}</span>
-                    {' '}results
+                    <span className="font-medium text-stone-600">{data.pagination.totalCount}</span>
                   </p>
                   <select
                     value={pageSize}
@@ -263,33 +259,31 @@ function TasksPage() {
                       setPageSize(Number(e.target.value));
                       setCurrentPage(1);
                     }}
-                    className="block w-20 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                    className="block w-16 rounded-lg border-stone-200 text-xs text-stone-600 focus:border-primary-500 focus:ring-primary-500"
                   >
                     {PAGE_SIZE_OPTIONS.map((size) => (
                       <option key={size} value={size}>{size}</option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-3 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Previous
-                    </button>
-                    <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
-                      Page {currentPage} of {Math.ceil(data.pagination.totalCount / pageSize)}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage(p => p + 1)}
-                      disabled={!data.pagination.hasMore}
-                      className="relative inline-flex items-center px-3 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Next
-                    </button>
-                  </nav>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-xs font-medium text-stone-500 bg-stone-50 border border-stone-200 rounded-lg hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-3 py-1.5 text-xs font-mono text-stone-500">
+                    {currentPage}/{Math.ceil(data.pagination.totalCount / pageSize)}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={!data.pagination.hasMore}
+                    className="px-3 py-1.5 text-xs font-medium text-stone-500 bg-stone-50 border border-stone-200 rounded-lg hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
             </div>

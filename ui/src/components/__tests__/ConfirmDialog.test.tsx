@@ -51,8 +51,8 @@ describe('ConfirmDialog', () => {
   it('calls onCancel when backdrop is clicked', () => {
     const onCancel = vi.fn();
     const { container } = render(<ConfirmDialog {...defaultProps} onCancel={onCancel} />);
-    // Backdrop is the first overlay div with bg-gray-500
-    const backdrop = container.querySelector('.bg-gray-500');
+    // Backdrop is the first overlay div with bg-black/50
+    const backdrop = container.querySelector('.bg-black\\/50');
     expect(backdrop).toBeInTheDocument();
     fireEvent.click(backdrop!);
     expect(onCancel).toHaveBeenCalledOnce();
@@ -74,12 +74,12 @@ describe('ConfirmDialog', () => {
   it('applies warning variant styles to confirm button', () => {
     render(<ConfirmDialog {...defaultProps} variant="warning" />);
     const confirmButton = screen.getByText('Confirm');
-    expect(confirmButton.className).toContain('bg-yellow-600');
+    expect(confirmButton.className).toContain('bg-amber-600');
   });
 
   it('applies default variant styles to confirm button', () => {
     render(<ConfirmDialog {...defaultProps} variant="default" />);
     const confirmButton = screen.getByText('Confirm');
-    expect(confirmButton.className).toContain('bg-primary-600');
+    expect(confirmButton.className).toContain('bg-stone-900');
   });
 });

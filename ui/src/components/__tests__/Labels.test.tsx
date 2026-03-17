@@ -44,15 +44,15 @@ describe('Labels', () => {
     expect(screen.queryByText('4')).not.toBeInTheDocument();
   });
 
-  it('shows "+N more" text when labels exceed maxDisplay', () => {
+  it('shows "+N" text when labels exceed maxDisplay', () => {
     const labels = { a: '1', b: '2', c: '3', d: '4' };
     render(<Labels labels={labels} maxDisplay={2} />);
-    expect(screen.getByText('+2 more')).toBeInTheDocument();
+    expect(screen.getByText('+2')).toBeInTheDocument();
   });
 
-  it('does not show "+N more" when all labels fit', () => {
+  it('does not show "+N" when all labels fit', () => {
     const labels = { a: '1', b: '2' };
     render(<Labels labels={labels} maxDisplay={5} />);
-    expect(screen.queryByText(/more/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
   });
 });

@@ -21,7 +21,6 @@ function DashboardPage() {
   const tasks = tasksData?.tasks || [];
   const agents = agentsData?.agents || [];
 
-  // Compute task stats
   const taskStats = {
     total: tasksData?.total || 0,
     running: tasks.filter((t) => t.phase === 'Running').length,
@@ -31,36 +30,42 @@ function DashboardPage() {
   };
 
   const statCards = [
-    { label: 'Total Tasks', value: taskStats.total, color: 'bg-gray-100 text-gray-900' },
-    { label: 'Running', value: taskStats.running, color: 'bg-blue-100 text-blue-900' },
-    { label: 'Queued', value: taskStats.queued, color: 'bg-yellow-100 text-yellow-900' },
-    { label: 'Completed', value: taskStats.completed, color: 'bg-green-100 text-green-900' },
-    { label: 'Failed', value: taskStats.failed, color: 'bg-red-100 text-red-900' },
+    { label: 'Total', value: taskStats.total, color: 'bg-stone-50 border-stone-200 text-stone-700', accent: 'text-stone-900' },
+    { label: 'Running', value: taskStats.running, color: 'bg-sky-50/80 border-sky-200 text-sky-700', accent: 'text-sky-900' },
+    { label: 'Queued', value: taskStats.queued, color: 'bg-amber-50/80 border-amber-200 text-amber-700', accent: 'text-amber-900' },
+    { label: 'Completed', value: taskStats.completed, color: 'bg-emerald-50/80 border-emerald-200 text-emerald-700', accent: 'text-emerald-900' },
+    { label: 'Failed', value: taskStats.failed, color: 'bg-red-50/80 border-red-200 text-red-700', accent: 'text-red-900' },
   ];
 
   const isLoading = tasksLoading || agentsLoading;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <div>
+          <h1 className="font-display text-2xl font-bold text-stone-900 tracking-tight">Dashboard</h1>
+          <p className="text-sm text-stone-500 mt-1">Overview of your AI agent tasks</p>
+        </div>
         <Link
           to="/tasks/create"
-          className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700"
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors shadow-sm"
         >
-          + New Task
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+          </svg>
+          New Task
         </Link>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {statCards.map((stat) => (
           <div
             key={stat.label}
-            className={`rounded-lg p-4 ${stat.color}`}
+            className={`rounded-xl p-4 border ${stat.color} transition-all hover:shadow-sm`}
           >
-            <p className="text-sm font-medium opacity-75">{stat.label}</p>
-            <p className="text-2xl font-bold mt-1">
+            <p className="text-xs font-medium uppercase tracking-wider opacity-70">{stat.label}</p>
+            <p className={`text-2xl font-display font-bold mt-1 ${stat.accent}`}>
               {isLoading ? '-' : stat.value}
             </p>
           </div>
@@ -69,48 +74,48 @@ function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Tasks */}
-        <div className="lg:col-span-2 bg-white shadow-sm rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Tasks</h2>
-            <Link to="/tasks" className="text-sm text-primary-600 hover:text-primary-800">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold text-stone-900">Recent Tasks</h2>
+            <Link to="/tasks" className="text-xs text-stone-500 hover:text-primary-600 transition-colors font-medium">
               View all
             </Link>
           </div>
           {isLoading ? (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-stone-100">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="px-6 py-4 flex items-center space-x-4">
-                  <div className="animate-pulse bg-gray-200 rounded h-4 w-32" />
-                  <div className="animate-pulse bg-gray-200 rounded h-6 w-16" />
-                  <div className="animate-pulse bg-gray-200 rounded h-4 w-20 ml-auto" />
+                <div key={i} className="px-5 py-3.5 flex items-center space-x-4">
+                  <div className="animate-pulse bg-stone-100 rounded h-4 w-32" />
+                  <div className="animate-pulse bg-stone-100 rounded-full h-5 w-16" />
+                  <div className="animate-pulse bg-stone-100 rounded h-4 w-20 ml-auto" />
                 </div>
               ))}
             </div>
           ) : tasks.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-500">
-              No tasks yet.{' '}
-              <Link to="/tasks/create" className="text-primary-600 hover:text-primary-800">
-                Create one
+            <div className="px-5 py-12 text-center">
+              <p className="text-stone-400 text-sm">No tasks yet.</p>
+              <Link to="/tasks/create" className="text-sm text-primary-600 hover:text-primary-700 font-medium mt-1 inline-block">
+                Create your first task
               </Link>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-stone-100">
               {tasks.slice(0, 8).map((task) => (
                 <li key={`${task.namespace}/${task.name}`}>
                   <Link
                     to={`/tasks/${task.namespace}/${task.name}`}
-                    className="block px-6 py-3 hover:bg-gray-50"
+                    className="block px-5 py-3 hover:bg-stone-50/80 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-stone-800 truncate">
                           {task.name}
                         </p>
-                        <p className="text-xs text-gray-500">{task.namespace}</p>
+                        <p className="text-xs text-stone-400 mt-0.5">{task.namespace}</p>
                       </div>
                       <div className="flex items-center space-x-3 ml-4">
                         <StatusBadge phase={task.phase || 'Pending'} />
-                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                        <span className="text-[11px] text-stone-400 whitespace-nowrap">
                           <TimeAgo date={task.createdAt} />
                         </span>
                       </div>
@@ -123,37 +128,37 @@ function DashboardPage() {
         </div>
 
         {/* Agents */}
-        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Agents</h2>
-            <Link to="/agents" className="text-sm text-primary-600 hover:text-primary-800">
+        <div className="bg-white rounded-xl border border-stone-200 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between">
+            <h2 className="font-display text-sm font-semibold text-stone-900">Agents</h2>
+            <Link to="/agents" className="text-xs text-stone-500 hover:text-primary-600 transition-colors font-medium">
               View all
             </Link>
           </div>
           {agentsLoading ? (
-            <div className="px-6 py-8 text-center text-gray-500">Loading...</div>
+            <div className="px-5 py-8 text-center text-stone-400 text-sm">Loading...</div>
           ) : agents.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-500">No agents configured</div>
+            <div className="px-5 py-8 text-center text-stone-400 text-sm">No agents configured</div>
           ) : (
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-stone-100">
               {agents.map((agent) => (
                 <li key={`${agent.namespace}/${agent.name}`}>
                   <Link
                     to={`/agents/${agent.namespace}/${agent.name}`}
-                    className="block px-6 py-3 hover:bg-gray-50"
+                    className="block px-5 py-3 hover:bg-stone-50/80 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-stone-800 truncate">
                           {agent.name}
                         </p>
-                        <p className="text-xs text-gray-500">{agent.namespace}</p>
+                        <p className="text-xs text-stone-400 mt-0.5">{agent.namespace}</p>
                       </div>
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${
                           agent.mode === 'Server'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-violet-50 text-violet-600 border border-violet-200'
+                            : 'bg-stone-50 text-stone-500 border border-stone-200'
                         }`}
                       >
                         {agent.mode}
