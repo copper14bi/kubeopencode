@@ -17,11 +17,11 @@
 
 ### Dashboard (Web UI)
 
-<video src="https://github.com/kubeopencode/kubeopencode/raw/main/docs/images/koc-gui.mp4" controls width="800"></video>
+https://github.com/user-attachments/assets/c82b55fa-6cf8-412f-8178-077b4cb1b546
 
 ### CLI (TUI Skills)
 
-<video src="https://github.com/kubeopencode/kubeopencode/raw/main/docs/images/koc-tui.mp4" controls width="800"></video>
+https://github.com/user-attachments/assets/e7781da2-febd-4faa-b0f8-ddc39c2fc334
 
 > **Skills**: Manage KubeOpenCode resources (Tasks, Agents) directly from your terminal using AI-powered skills. See [kubeopencode/skills](https://github.com/kubeopencode/skills) for the full collection.
 
