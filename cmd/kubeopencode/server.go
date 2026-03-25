@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/kubeopencode/kubeopencode/internal/server"
+	"github.com/kubeopencode/kubeopencode/internal/server/handlers"
 )
 
 func init() {
@@ -65,6 +66,9 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	log := ctrl.Log.WithName("server")
+
+	// Pass version from ldflags to server handlers
+	handlers.Version = Version
 
 	log.Info("Starting KubeOpenCode server", "address", serverAddress)
 

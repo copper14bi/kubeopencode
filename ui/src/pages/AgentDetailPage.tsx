@@ -164,12 +164,19 @@ function AgentDetailPage() {
                 <p className="mt-2 text-sm text-stone-500 leading-relaxed">{agent.profile}</p>
               )}
             </div>
-            <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-medium border ${
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
               agent.mode === 'Server'
-                ? 'bg-violet-50 text-violet-600 border-violet-200'
+                ? agent.serverStatus?.readyReplicas
+                  ? 'bg-violet-50 text-violet-600 border-violet-200'
+                  : 'bg-amber-50 text-amber-600 border-amber-200'
                 : 'bg-stone-50 text-stone-500 border-stone-200'
             }`}>
-              {agent.mode} Mode
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                agent.mode === 'Server'
+                  ? agent.serverStatus?.readyReplicas ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                  : 'bg-stone-400'
+              }`} />
+              {agent.mode} Mode{agent.mode === 'Server' && !agent.serverStatus?.readyReplicas ? ' (Not Ready)' : ''}
             </span>
           </div>
         </div>
@@ -232,27 +239,39 @@ function AgentDetailPage() {
           )}
 
           {/* Server Status */}
-          {agent.serverStatus && (
+          {agent.mode === 'Server' && (
             <div>
               <h3 className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-3">Server Status</h3>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                  <dt className="text-xs text-stone-400">Deployment</dt>
-                  <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.deploymentName}</dd>
+              {agent.serverStatus ? (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  <div>
+                    <dt className="text-xs text-stone-400">Deployment</dt>
+                    <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.deploymentName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-stone-400">Service</dt>
+                    <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.serviceName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-stone-400">URL</dt>
+                    <dd className="mt-1 text-sm text-stone-700 font-mono break-all">{agent.serverStatus.url}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-stone-400">Ready Replicas</dt>
+                    <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.readyReplicas}</dd>
+                  </div>
                 </div>
-                <div>
-                  <dt className="text-xs text-stone-400">Service</dt>
-                  <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.serviceName}</dd>
+              ) : (
+                <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <p className="text-sm text-amber-700 font-medium">Server not ready</p>
+                  </div>
+                  <p className="text-xs text-amber-600 mt-1">
+                    The server deployment has not been created yet or is still starting up. Check controller logs for errors.
+                  </p>
                 </div>
-                <div>
-                  <dt className="text-xs text-stone-400">URL</dt>
-                  <dd className="mt-1 text-sm text-stone-700 font-mono break-all">{agent.serverStatus.url}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-stone-400">Ready Replicas</dt>
-                  <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.readyReplicas}</dd>
-                </div>
-              </div>
+              )}
             </div>
           )}
 

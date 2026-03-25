@@ -35,6 +35,38 @@ kubectl auth can-i create pods \
 
 If denied, check the ClusterRole and ClusterRoleBinding are properly installed.
 
+### Server-mode Agent Fails with "cannot set blockOwnerDeletion"
+
+If controller logs show:
+
+```
+configmaps "xxx-server-context" is forbidden: cannot set blockOwnerDeletion
+if an ownerReference refers to a resource you can't set finalizers on
+```
+
+This means the controller ClusterRole is missing `agents/finalizers` permission. This is required for creating ConfigMaps and Deployments with `blockOwnerDeletion` OwnerReferences pointing to Agent resources.
+
+**Fix**: Ensure the controller ClusterRole includes `agents/finalizers`:
+
+```yaml
+- apiGroups:
+  - kubeopencode.io
+  resources:
+  - tasks/finalizers
+  - agents/finalizers    # Required for Server-mode Agents
+  verbs:
+  - update
+```
+
+Or patch it directly:
+
+```bash
+kubectl patch clusterrole kubeopencode-controller --type='json' \
+  -p='[{"op": "replace", "path": "/rules/2/resources", "value": ["tasks/finalizers", "agents/finalizers"]}]'
+```
+
+> **Note**: This issue is more likely to surface on OpenShift clusters, which enforce `blockOwnerDeletion` RBAC checks more strictly than Kind or vanilla Kubernetes clusters.
+
 ### CRDs Not Found
 
 Ensure CRDs are installed:

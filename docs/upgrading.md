@@ -106,6 +106,7 @@ This section tracks which releases include CRD changes, so operators know when m
 
 | Version | CRD Changes | Description |
 |---------|-------------|-------------|
+| v0.0.9  | No (RBAC)   | Added `agents/finalizers` permission to controller ClusterRole (required for Server-mode Agents on OpenShift); fixed UI version display |
 | v0.0.4  | Yes         | Removed `AgentReference.Namespace`, `TaskExecutionStatus.PodNamespace`, `AgentSpec.AllowedNamespaces` |
 | v0.0.3  | No          | Bug fixes only |
 | v0.0.2  | No          | Bug fixes only |
