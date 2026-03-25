@@ -35,6 +35,9 @@ var (
 	scheme    *runtime.Scheme
 	testNS    string
 	echoImage string
+
+	// OpenCode test configuration (for LabelOpenCode tests)
+	opencodeImage string // OpenCode agent image (init container)
 )
 
 const (
@@ -50,6 +53,9 @@ const (
 	// Default echo agent image
 	defaultEchoImage = "quay.io/kubeopencode/kubeopencode-agent-echo:latest"
 
+	// Default OpenCode agent image (init container that copies opencode binary)
+	defaultOpenCodeImage = "quay.io/kubeopencode/kubeopencode-agent-opencode:latest"
+
 	// Test ServiceAccount name for e2e tests
 	testServiceAccount = "kubeopencode-e2e-agent"
 )
@@ -57,9 +63,10 @@ const (
 // Test labels for selective execution
 // Usage: make e2e-test-label LABEL="task"
 const (
-	LabelTask   = "task"
-	LabelAgent  = "agent"
-	LabelServer = "server"
+	LabelTask     = "task"
+	LabelAgent    = "agent"
+	LabelServer   = "server"
+	LabelOpenCode = "opencode" // Tests using real OpenCode with free models
 
 	// Extended timeout for server mode tests
 	serverTimeout = time.Minute * 10
@@ -161,7 +168,13 @@ var _ = BeforeSuite(func() {
 		return false
 	}, timeout, interval).Should(BeTrue(), "Controller should be running")
 
-	GinkgoWriter.Printf("E2E test setup complete. Namespace: %s, Echo Image: %s\n", testNS, echoImage)
+	// Setup OpenCode test configuration
+	opencodeImage = os.Getenv("E2E_OPENCODE_IMAGE")
+	if opencodeImage == "" {
+		opencodeImage = defaultOpenCodeImage
+	}
+
+	GinkgoWriter.Printf("E2E test setup complete. Namespace: %s, Echo Image: %s, OpenCode Image: %s\n", testNS, echoImage, opencodeImage)
 })
 
 var _ = AfterSuite(func() {
