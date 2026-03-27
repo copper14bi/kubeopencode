@@ -10,6 +10,7 @@ cover.out
 
 # Built binaries
 /kubeopencode
+/koc
 
 # Helm
 dist/
