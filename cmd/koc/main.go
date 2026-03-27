@@ -27,7 +27,7 @@ func init() {
 var rootCmd = &cobra.Command{
 	Use:   "koc",
 	Short: "KubeOpenCode CLI",
-	Long: `koc is the KubeOpenCode CLI for managing agents and interactive sessions.
+	Long: `koc is the KubeOpenCode CLI for managing agents and tasks.
 
 Commands:
   get agents       List available agents across namespaces
