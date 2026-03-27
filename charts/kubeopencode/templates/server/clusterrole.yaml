@@ -22,6 +22,10 @@ rules:
 - apiGroups: [""]
   resources: ["pods/log"]
   verbs: ["get"]
+# Exec into Pods (required for web terminal to agent server pods)
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
 # Read access to Namespaces (for namespace listing)
 - apiGroups: [""]
   resources: ["namespaces"]

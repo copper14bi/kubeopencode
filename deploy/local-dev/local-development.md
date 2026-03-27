@@ -494,57 +494,6 @@ Check events:
 kubectl get events -n kubeopencode-system --sort-by='.lastTimestamp'
 ```
 
-### OpenCode Web UI Not Loading in Kind Cluster
-
-The embedded OpenCode Web UI requires static assets to be included in the Docker image at build time. By default, local builds skip the OpenCode Web UI build (`BUILD_OPENCODE_UI=false`) because it requires cloning and building the OpenCode project, which needs network access.
-
-**Symptoms:**
-- JS module files return `text/html` MIME type errors
-- "Failed to load module script" errors in browser console
-- CSP violations for external fonts (`r2cdn.perplexity.ai`)
-
-**Root cause:** Without embedded assets, the Web UI falls back to proxying through the OpenCode server pod, which cannot reach `app.opencode.ai` from inside the Kind cluster (no internet access).
-
-**Solution — Download pre-built assets from CDN:**
-
-Run this script to download the OpenCode Web UI assets directly from the CDN and embed them in the image:
-
-```bash
-# Download pre-built OpenCode Web UI assets from CDN
-DIST_DIR="internal/opencode-app/dist"
-rm -rf "$DIST_DIR" && mkdir -p "$DIST_DIR/assets"
-
-# Download index.html and static assets
-curl -s https://app.opencode.ai/ -o "$DIST_DIR/index.html"
-for path in $(grep -o '"/[^"]*"' "$DIST_DIR/index.html" | tr -d '"' | sort -u); do
-  dest="$DIST_DIR$path"
-  mkdir -p "$(dirname "$dest")"
-  curl -s "https://app.opencode.ai$path" -o "$dest"
-done
-
-# Download lazy-loaded JS chunks from main bundle
-MAIN_JS=$(ls $DIST_DIR/assets/index-*.js)
-grep -o '"\.\/[^"]*\.js"' "$MAIN_JS" | tr -d '"' | sed 's|^\./||' | sort -u | \
-  xargs -P 10 -I{} curl -s "https://app.opencode.ai/assets/{}" -o "$DIST_DIR/assets/{}"
-
-echo "Downloaded $(ls $DIST_DIR/assets/ | wc -l) asset files"
-
-# Rebuild Docker image (assets are now embedded via go:embed)
-make docker-build
-```
-
-The `go:embed` directive in `internal/opencode-app/embed.go` automatically picks up these files. The handler detects embedded assets and serves them locally (self-hosted mode), only proxying API calls to the OpenCode server.
-
-**Alternative — Build from source** (requires bun):
-
-```bash
-# If you have the OpenCode source at ../opencode
-make opencode-app-build
-make docker-build
-```
-
-**Note:** In CI/CD (GitHub Actions), `BUILD_OPENCODE_UI=true` is set automatically, which clones and builds OpenCode from source inside the Docker build stage. This issue only affects local Kind clusters.
-
 ### CRDs Not Found
 
 Ensure CRDs are installed:

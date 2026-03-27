@@ -1,20 +1,4 @@
-# Stage 1: Build OpenCode Web UI from source (self-hosted mode)
-# When BUILD_OPENCODE_UI=false, creates empty placeholder (runtime falls back to CDN proxy)
-FROM oven/bun:1.3.6-alpine AS opencode-ui-builder
-ARG OPENCODE_APP_VERSION=v1.3.2
-ARG BUILD_OPENCODE_UI=true
-
-WORKDIR /opencode
-RUN if [ "$BUILD_OPENCODE_UI" = "true" ]; then \
-      apk add --no-cache git && \
-      git clone --depth 1 --branch ${OPENCODE_APP_VERSION} https://github.com/anomalyco/opencode.git . && \
-      bun install --frozen-lockfile --ignore-scripts && \
-      cd packages/app && bun run build; \
-    else \
-      mkdir -p packages/app/dist && touch packages/app/dist/.gitkeep; \
-    fi
-
-# Stage 2: Build the kubeopencode unified binary
+# Stage 1: Build the kubeopencode unified binary
 FROM golang:1.26-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
@@ -34,9 +18,6 @@ COPY api/ api/
 COPY internal/ internal/
 COPY vendor/ vendor/
 COPY ui/ ui/
-
-# Copy the built OpenCode Web UI assets into the embed directory
-COPY --from=opencode-ui-builder /opencode/packages/app/dist internal/opencode-app/dist/
 
 # Build using vendor directory (faster, no download needed)
 # Build the unified kubeopencode binary with all subcommands

@@ -210,12 +210,9 @@ func (s *Server) setupRoutes() *chi.Mux {
 				r.HandleFunc("/", agentProxyHandler.ServeProxy)
 			})
 
-			// Agent web UI - serves OpenCode Web UI through proxy with URL rewriting
-			agentWebHandler := handlers.NewAgentWebHandler(s.k8sClient)
-			r.Route("/{name}/web", func(r chi.Router) {
-				r.HandleFunc("/*", agentWebHandler.ServeWeb)
-				r.HandleFunc("/", agentWebHandler.ServeWeb)
-			})
+			// Agent terminal - WebSocket terminal to agent server pods
+			agentTerminalHandler := handlers.NewAgentTerminalHandler(s.k8sClient, s.clientset, s.restConfig)
+			r.Get("/{name}/terminal", agentTerminalHandler.ServeTerminal)
 		})
 
 	})
@@ -270,9 +267,10 @@ func (s *Server) impersonationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userInfo := authmiddleware.GetUserInfo(r.Context())
 
-		// If no user info (auth disabled or anonymous allowed), use default client
+		// If no user info (auth disabled or anonymous allowed), use default clients
 		if userInfo == nil {
 			ctx := context.WithValue(r.Context(), handlers.ClientContextKey{}, s.k8sClient)
+			ctx = context.WithValue(ctx, handlers.ClientsetContextKey{}, s.clientset)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -293,7 +291,16 @@ func (s *Server) impersonationMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Create impersonated clientset for operations that need kubernetes.Interface (e.g., pod logs)
+		impersonatedClientset, err := kubernetes.NewForConfig(impersonatedConfig)
+		if err != nil {
+			log.Error(err, "Failed to create impersonated clientset", "user", userInfo.Username)
+			http.Error(w, "Failed to create client", http.StatusInternalServerError)
+			return
+		}
+
 		ctx := context.WithValue(r.Context(), handlers.ClientContextKey{}, impersonatedClient)
+		ctx = context.WithValue(ctx, handlers.ClientsetContextKey{}, impersonatedClientset)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

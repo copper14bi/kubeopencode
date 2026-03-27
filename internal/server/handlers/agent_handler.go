@@ -20,6 +20,10 @@ import (
 // the per-request client, and by all handlers to retrieve it.
 type ClientContextKey struct{}
 
+// ClientsetContextKey is the context key for the impersonated Kubernetes clientset.
+// Used by handlers that need clientset operations (e.g., pod logs) with user RBAC.
+type ClientsetContextKey struct{}
+
 // AgentHandler handles agent-related HTTP requests
 type AgentHandler struct {
 	defaultClient client.Client

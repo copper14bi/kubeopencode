@@ -15,7 +15,7 @@
 
 ## Demo
 
-### Dashboard (Web UI)
+### Dashboard
 
 https://github.com/user-attachments/assets/c82b55fa-6cf8-412f-8178-077b4cb1b546
 
@@ -134,7 +134,7 @@ kubectl get tasks -n kubeopencode-system -w
 kubectl logs $(kubectl get task my-task -o jsonpath='{.status.podName}') -n kubeopencode-system
 ```
 
-See the [Getting Started Guide](docs/getting-started.md) for detailed examples including batch operations and Web UI access.
+See the [Getting Started Guide](docs/getting-started.md) for detailed examples including batch operations and web terminal access.
 
 ### CLI
 

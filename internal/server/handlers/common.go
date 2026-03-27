@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -41,6 +42,14 @@ func clientFromContext(ctx context.Context, defaultClient client.Client) client.
 		return c
 	}
 	return defaultClient
+}
+
+// clientsetFromContext returns the impersonated clientset from context or falls back to the default.
+func clientsetFromContext(ctx context.Context, defaultClientset kubernetes.Interface) kubernetes.Interface {
+	if cs, ok := ctx.Value(ClientsetContextKey{}).(kubernetes.Interface); ok && cs != nil {
+		return cs
+	}
+	return defaultClientset
 }
 
 // resolveAgentServerURL looks up the Agent CR and returns its in-cluster server URL.

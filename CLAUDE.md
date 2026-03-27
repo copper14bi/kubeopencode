@@ -786,7 +786,7 @@ The controller requires permissions for:
 | File | Description | When to Update |
 |------|-------------|----------------|
 | `README.md` | High-level overview, community, quick start | User-facing changes, new features |
-| `docs/getting-started.md` | Installation, Web UI, detailed examples (Agent, Task, batch operations) | Installation changes, new examples |
+| `docs/getting-started.md` | Installation, web terminal, detailed examples (Agent, Task, batch operations) | Installation changes, new examples |
 | `docs/features.md` | Context system, Agent configuration, concurrency, quota, pod configuration | Feature changes, new configuration options |
 | `docs/agent-images.md` | Two-container pattern, available images, image resolution, building agent images | Agent image changes, new images |
 | `docs/security.md` | RBAC, credential management, controller/agent pod security, best practices | Security-related changes |

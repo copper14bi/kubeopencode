@@ -171,7 +171,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            BUILD_OPENCODE_UI=true
           tags: |
             ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_NAME }}:latest
             ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/${{ env.IMG_NAME }}:${{ github.sha }}

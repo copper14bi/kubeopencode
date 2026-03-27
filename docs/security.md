@@ -9,6 +9,59 @@ KubeOpenCode follows the principle of least privilege:
 - **Controller**: ClusterRole with minimal permissions for Tasks, Agents, Pods, ConfigMaps, Secrets, and Events
 - **Agent ServiceAccount**: Namespace-scoped Role with read/update access to Tasks and read-only access to related resources
 
+### Web UI User Permissions
+
+The Helm chart includes a `kubeopencode-web-user` ClusterRole with all permissions needed to use the web dashboard. Bind it per namespace to grant team access:
+
+| Permission | Resource | Verbs | Used By |
+|-----------|----------|-------|---------|
+| View tasks and agents | `kubeopencode.io` tasks, agents | get, list, watch | Dashboard, task list |
+| Manage tasks | `kubeopencode.io` tasks | create, delete, patch | Task creation, stop, delete |
+| View pods | `""` pods | get, list | Task detail (pod status) |
+| Stream logs | `""` pods/log | get | Log viewer |
+| Web terminal | `""` pods/exec | create | Terminal to agent server pods |
+
+**Example: Grant access to a team in their namespace**
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: team-a-kubeopencode-user
+  namespace: team-a
+subjects:
+  - kind: Group
+    name: team-a-devs
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: kubeopencode-web-user
+  apiGroup: rbac.authorization.k8s.io
+```
+
+**Restricted access (no terminal, logs only):**
+
+Create a custom ClusterRole without `pods/exec`:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeopencode-viewer
+rules:
+  - apiGroups: ["kubeopencode.io"]
+    resources: ["tasks", "agents"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+```
+
+> **Note:** The web UI server enforces RBAC by impersonating the authenticated user for all Kubernetes API calls. Users will only see resources and actions they have permission for.
+
 ## Credential Management
 
 - Secrets mounted with restrictive file permissions (default `0600`)

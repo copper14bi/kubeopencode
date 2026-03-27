@@ -47,6 +47,7 @@ module.exports = {
         context: ['/api', '/health', '/ready'],
         target: 'http://localhost:2746',
         changeOrigin: true,
+        ws: true,
       },
     ],
   },

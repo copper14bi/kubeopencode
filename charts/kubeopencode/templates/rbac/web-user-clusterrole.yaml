@@ -1,0 +1,48 @@
+{{- if .Values.server.enabled }}
+# ClusterRole for KubeOpenCode Web UI users.
+# Bind this to users/groups per namespace via RoleBinding to grant
+# access to the web dashboard, task management, log viewing, and terminal.
+#
+# Example RoleBinding:
+#   apiVersion: rbac.authorization.k8s.io/v1
+#   kind: RoleBinding
+#   metadata:
+#     name: team-kubeopencode-user
+#     namespace: team-namespace
+#   subjects:
+#     - kind: Group
+#       name: my-team
+#       apiGroup: rbac.authorization.k8s.io
+#   roleRef:
+#     kind: ClusterRole
+#     name: {{ include "kubeopencode.fullname" . }}-web-user
+#     apiGroup: rbac.authorization.k8s.io
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kubeopencode.fullname" . }}-web-user
+  labels:
+    {{- include "kubeopencode.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web-user
+rules:
+# View tasks and agents
+- apiGroups: ["kubeopencode.io"]
+  resources: ["tasks", "agents"]
+  verbs: ["get", "list", "watch"]
+# Create, stop, and delete tasks
+- apiGroups: ["kubeopencode.io"]
+  resources: ["tasks"]
+  verbs: ["create", "delete", "patch"]
+# View pod status (required by task detail page)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+# Stream task logs (required by log viewer)
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+# Web terminal access (required to exec into agent server pods)
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+{{- end }}

@@ -311,25 +311,26 @@ func (h *TaskHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	podPhase := string(pod.Status.Phase)
 	writeSSEEvent(w, flusher, types.LogEvent{Type: "status", Phase: &phase, PodPhase: &podPhase})
 
-	// Stream pod logs using clientset
-	h.streamPodLogs(ctx, w, flusher, podNamespace, task.Status.PodName, container, follow, namespace, name)
+	// Stream pod logs using impersonated clientset for RBAC enforcement
+	clientset := clientsetFromContext(ctx, h.defaultClientset)
+	h.streamPodLogs(ctx, w, flusher, clientset, podNamespace, task.Status.PodName, container, follow, namespace, name)
 }
 
-// streamPodLogs streams actual pod logs using clientset
-func (h *TaskHandler) streamPodLogs(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, podNamespace, podName, container string, follow bool, taskNamespace, taskName string) {
+// streamPodLogs streams actual pod logs using the provided clientset (impersonated for RBAC).
+func (h *TaskHandler) streamPodLogs(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, clientset kubernetes.Interface, podNamespace, podName, container string, follow bool, taskNamespace, taskName string) {
 	// Create pod log options
 	logOptions := &corev1.PodLogOptions{
 		Container: container,
 		Follow:    follow,
 	}
 
-	// Get log stream from clientset
-	req := h.defaultClientset.CoreV1().Pods(podNamespace).GetLogs(podName, logOptions)
+	// Get log stream from clientset (uses impersonated identity for RBAC)
+	req := clientset.CoreV1().Pods(podNamespace).GetLogs(podName, logOptions)
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		// If container not found or not ready, try without specifying container
 		logOptions.Container = ""
-		req = h.defaultClientset.CoreV1().Pods(podNamespace).GetLogs(podName, logOptions)
+		req = clientset.CoreV1().Pods(podNamespace).GetLogs(podName, logOptions)
 		stream, err = req.Stream(ctx)
 		if err != nil {
 			writeSSEEvent(w, flusher, types.LogEvent{Type: "error", Message: fmt.Sprintf("Failed to get logs: %s", err.Error())})

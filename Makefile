@@ -139,20 +139,12 @@ verify: check-env
 
 ##@ Docker
 
-# BUILD_OPENCODE_UI controls whether to build OpenCode Web UI from source.
-# true  = self-hosted mode (default in CI, requires network to clone OpenCode)
-# false = fallback mode (default for local dev, proxies UI through OpenCode server at runtime)
-BUILD_OPENCODE_UI ?= false
-
 # Build the docker image (includes UI build)
-# Set BUILD_OPENCODE_UI=true to include self-hosted OpenCode Web UI
 docker-build: ui-build
 	docker build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_DATE) \
-		--build-arg OPENCODE_APP_VERSION=$(OPENCODE_APP_VERSION) \
-		--build-arg BUILD_OPENCODE_UI=$(BUILD_OPENCODE_UI) \
 		-t $(IMG) .
 .PHONY: docker-build
 
@@ -161,15 +153,13 @@ docker-push:
 	docker push $(IMG)
 .PHONY: docker-push
 
-# Build and push docker image for multiple architectures (includes UI build + OpenCode Web UI)
+# Build and push docker image for multiple architectures (includes UI build)
 docker-buildx: ui-build
 	docker buildx create --use --name=kubeopencode-builder || true
 	docker buildx build \
 		--platform=$(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
-		--build-arg OPENCODE_APP_VERSION=$(OPENCODE_APP_VERSION) \
-		--build-arg BUILD_OPENCODE_UI=$(BUILD_OPENCODE_UI) \
 		--build-arg BUILD_TIME=$(BUILD_DATE) \
 		--tag $(IMG) \
 		--push \
@@ -260,32 +250,6 @@ ui-clean: ## Clean UI build artifacts
 	rm -rf ui/node_modules
 .PHONY: ui-clean
 
-# OpenCode Web UI (self-hosted)
-OPENCODE_APP_VERSION ?= v1.3.2
-OPENCODE_DIR ?= ../opencode
-OPENCODE_APP_DIR := $(OPENCODE_DIR)/packages/app
-OPENCODE_APP_DIST := internal/opencode-app/dist
-
-opencode-app-build: ## Build OpenCode Web UI from source for self-hosting
-	@if [ ! -d "$(OPENCODE_APP_DIR)" ]; then \
-		echo "Error: OpenCode source not found at $(OPENCODE_DIR)"; \
-		echo "Clone it: git clone https://github.com/anomalyco/opencode.git $(OPENCODE_DIR)"; \
-		exit 1; \
-	fi
-	@echo "Building OpenCode Web UI from $(OPENCODE_APP_DIR)..."
-	cd $(OPENCODE_DIR) && bun install --frozen-lockfile
-	cd $(OPENCODE_APP_DIR) && bun run build
-	rm -rf $(OPENCODE_APP_DIST)
-	cp -r $(OPENCODE_APP_DIR)/dist $(OPENCODE_APP_DIST)
-	@echo "OpenCode Web UI build complete → $(OPENCODE_APP_DIST)"
-.PHONY: opencode-app-build
-
-opencode-app-clean: ## Clean OpenCode Web UI build artifacts
-	rm -rf $(OPENCODE_APP_DIST)
-	mkdir -p $(OPENCODE_APP_DIST)
-	touch $(OPENCODE_APP_DIST)/.gitkeep
-.PHONY: opencode-app-clean
-
 ##@ Development
 
 # Run controller locally
@@ -336,7 +300,7 @@ e2e-kind-delete: ## Delete kind cluster
 
 # Build docker image for e2e testing
 e2e-docker-build: ## Build docker image for e2e testing
-	docker build --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg BUILD_TIME=$(BUILD_DATE) --build-arg OPENCODE_APP_VERSION=$(OPENCODE_APP_VERSION) --build-arg BUILD_OPENCODE_UI=$(BUILD_OPENCODE_UI) -t $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(E2E_IMG_TAG) .
+	docker build --build-arg GIT_COMMIT=$(GIT_COMMIT) --build-arg BUILD_TIME=$(BUILD_DATE) -t $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME):$(E2E_IMG_TAG) .
 .PHONY: e2e-docker-build
 
 # Load docker image into kind cluster

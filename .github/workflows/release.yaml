@@ -167,7 +167,6 @@ jobs:
             VERSION=${{ needs.prepare.outputs.version }}
             GIT_COMMIT=${{ github.sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
-            BUILD_OPENCODE_UI=true
           tags: |
             ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode:${{ needs.prepare.outputs.tag }}
             ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode:latest

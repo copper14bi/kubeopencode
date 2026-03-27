@@ -5,7 +5,7 @@ import api from '../api/client';
 import Labels from '../components/Labels';
 import Breadcrumbs from '../components/Breadcrumbs';
 import YamlViewer from '../components/YamlViewer';
-import WebUIPanel from '../components/WebUIPanel';
+import TerminalPanel from '../components/TerminalPanel';
 import { DetailSkeleton } from '../components/Skeleton';
 
 function CopyButton({ text }: { text: string }) {
@@ -228,9 +228,9 @@ function AgentDetailPage() {
             </div>
           )}
 
-          {/* Web UI Panel (Server mode, ready) */}
+          {/* Terminal Panel (Server mode, ready) */}
           {agent.mode === 'Server' && agent.serverStatus && (agent.serverStatus.readyReplicas ?? 0) > 0 && (
-            <WebUIPanel namespace={agent.namespace} agentName={agent.name} />
+            <TerminalPanel namespace={agent.namespace} agentName={agent.name} />
           )}
 
           {/* Quick Connect (Server mode only) */}

@@ -1,5 +1,7 @@
 # ADR 0017: OpenCode Web UI Integration via Self-Hosted Reverse Proxy
 
+> **Status: Superseded** by [ADR 0018](0018-web-terminal-replaces-web-ui.md). The OpenCode Web UI proxy approach described here has been replaced with a web terminal (xterm.js + Kubernetes pod exec).
+
 ## Status
 
 Accepted (self-hosted mode implemented, iframe embedding in progress)
