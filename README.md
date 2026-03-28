@@ -15,26 +15,13 @@
 
 ## Demo
 
-### Dashboard
-
-https://github.com/user-attachments/assets/c82b55fa-6cf8-412f-8178-077b4cb1b546
-
-### CLI (TUI Skills)
-
-https://github.com/user-attachments/assets/e7781da2-febd-4faa-b0f8-ddc39c2fc334
-
-> **Skills**: Manage KubeOpenCode resources (Tasks, Agents) directly from your terminal using AI-powered skills. See [kubeopencode/skills](https://github.com/kubeopencode/skills) for the full collection.
+<video src="https://github.com/kubeopencode/kubeopencode/releases/download/v0.0.12/kube-intro.mp4" controls width="100%"></video>
 
 ## Overview
 
 KubeOpenCode enables you to execute [OpenCode](https://opencode.ai) AI agent tasks using Kubernetes Custom Resources. It provides a simple, declarative, GitOps-friendly approach to running AI coding agents as Kubernetes Pods.
 
-## Community & Dogfooding
-
-> **We eat our own dog food!** KubeOpenCode uses itself in production:
-> - GitHub webhooks trigger Tasks via [Argo Events](https://argoproj.github.io/argo-events/) for automated PR reviews, issue triage, and more
-> - The **KubeOpenCode bot** in Slack and GitHub Discussions is powered by KubeOpenCode itself
-> - See [kubeopencode/dogfooding](https://github.com/kubeopencode/dogfooding) for the full deployment configuration
+## Community
 
 **Get Help & Connect:**
 
