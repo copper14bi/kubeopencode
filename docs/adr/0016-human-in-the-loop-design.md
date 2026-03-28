@@ -1,5 +1,10 @@
 # ADR 0016: Human-in-the-Loop (HITL) Design for KubeOpenCode
 
+> **Status: Partially Superseded.** The HITL REST API endpoints and Interactive Session UI panel
+> (`hitl_handler.go`, `HITLPanel.tsx`) described in Phase 2 have been removed. Interactive agent
+> sessions are now handled via the Web Terminal (ADR 0018) and `kubeoc agent attach` CLI.
+> The Phase 1 approach (direct OpenCode TUI via port-forward) remains valid.
+
 ## Status
 
 Accepted (Phase 1–2 implemented with simplified model)

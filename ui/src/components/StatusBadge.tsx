@@ -20,7 +20,7 @@ function StatusBadge({ phase }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${style.bg} ${style.text} ${style.border}`}
+      className={`inline-flex items-center text-xs font-medium ${style.text}`}
     >
       {isActive ? (
         <span className="relative mr-1.5 flex h-1.5 w-1.5">

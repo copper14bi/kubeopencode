@@ -227,7 +227,7 @@ func agentToResponse(agent *kubeopenv1alpha1.Agent) types.AgentResponse {
 			DeploymentName: agent.Status.ServerStatus.DeploymentName,
 			ServiceName:    agent.Status.ServerStatus.ServiceName,
 			URL:            agent.Status.ServerStatus.URL,
-			ReadyReplicas:  agent.Status.ServerStatus.ReadyReplicas,
+			Ready:          agent.Status.ServerStatus.Ready,
 			Port:           controller.GetServerPort(agent),
 		}
 	}

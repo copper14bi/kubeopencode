@@ -118,7 +118,7 @@ type ServerStatusInfo struct {
 	DeploymentName string `json:"deploymentName,omitempty"`
 	ServiceName    string `json:"serviceName,omitempty"`
 	URL            string `json:"url,omitempty"`
-	ReadyReplicas  int32  `json:"readyReplicas"`
+	Ready          bool   `json:"ready"`
 	Port           int32  `json:"port,omitempty"`
 }
 
@@ -152,25 +152,3 @@ type ErrorResponse struct {
 	Code    int    `json:"code"`
 }
 
-// HITLEvent represents an event from the OpenCode server SSE stream
-type HITLEvent struct {
-	Type       string      `json:"type"`
-	Properties interface{} `json:"properties,omitempty"`
-}
-
-// PermissionReplyRequest represents a request to reply to a permission
-type PermissionReplyRequest struct {
-	Reply   string `json:"reply"` // "once", "always", or "reject"
-	Message string `json:"message,omitempty"`
-}
-
-// QuestionReplyRequest represents a request to reply to a question
-type QuestionReplyRequest struct {
-	Answers [][]string `json:"answers"`
-}
-
-// SendMessageRequest represents a request to send a message to a session
-type SendMessageRequest struct {
-	SessionID string `json:"sessionId"`
-	Message   string `json:"message"`
-}

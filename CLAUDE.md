@@ -636,7 +636,7 @@ status:
     deploymentName: slack-agent-server
     serviceName: slack-agent
     url: http://slack-agent.platform-agents.svc.cluster.local:4096
-    readyReplicas: 1
+    ready: true
   conditions:
     - type: ServerReady
       status: "True"
@@ -894,7 +894,7 @@ kubectl logs <pod-name> -n kubeopencode-system
 
 ## Project Status
 
-- **Version**: v0.0.12
+- **Version**: v0.0.13
 - **API Stability**: v1alpha1 (subject to change)
 - **License**: Apache License 2.0
 - **Maintainer**: kubeopencode/kubeopencode team

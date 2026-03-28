@@ -35,9 +35,6 @@ const (
 	ConditionTypeQueued = "Queued"
 	// ConditionTypeStopped is the condition type for Task stop
 	ConditionTypeStopped = "Stopped"
-	// ConditionTypeWaitingInput is the condition type for HITL waiting input
-	ConditionTypeWaitingInput = "WaitingInput"
-
 	// ReasonAgentError is the reason for Agent errors
 	ReasonAgentError = "AgentError"
 	// ReasonAgentAtCapacity is the reason for Agent capacity limit

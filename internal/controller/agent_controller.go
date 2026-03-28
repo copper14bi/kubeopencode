@@ -215,22 +215,22 @@ func (r *AgentReconciler) updateAgentStatus(ctx context.Context, agent *kubeopen
 		if !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to get Deployment: %w", err)
 		}
-		agent.Status.ServerStatus.ReadyReplicas = 0
+		agent.Status.ServerStatus.Ready = false
 	} else {
-		agent.Status.ServerStatus.ReadyReplicas = deployment.Status.ReadyReplicas
+		agent.Status.ServerStatus.Ready = deployment.Status.ReadyReplicas > 0
 
 		// Server health is determined by Deployment readiness
 		// The Deployment's readiness probe checks /session/status endpoint
-		if deployment.Status.ReadyReplicas > 0 {
-			setAgentCondition(agent, AgentConditionServerHealthy, metav1.ConditionTrue, "DeploymentHealthy", "Server deployment has ready replicas")
+		if agent.Status.ServerStatus.Ready {
+			setAgentCondition(agent, AgentConditionServerHealthy, metav1.ConditionTrue, "DeploymentHealthy", "Server deployment is ready")
 		}
 	}
 
-	// Set ServerReady condition based on ready replicas
-	if agent.Status.ServerStatus.ReadyReplicas > 0 {
-		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionTrue, "DeploymentReady", "Server deployment has ready replicas")
+	// Set ServerReady condition
+	if agent.Status.ServerStatus.Ready {
+		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionTrue, "DeploymentReady", "Server deployment is ready")
 	} else {
-		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "DeploymentNotReady", "Server deployment has no ready replicas")
+		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "DeploymentNotReady", "Server deployment is not ready")
 	}
 
 	// Update observed generation

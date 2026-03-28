@@ -583,7 +583,7 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 	// Without this, OpenCode would prompt for permission approval which would
 	// block task execution in a Pod environment.
 	// If the Agent config contains a "permission" field, skip the default to let
-	// the user's custom permission config take effect (e.g., for HITL scenarios).
+	// the user's custom permission config take effect (e.g., for interactive sessions).
 	if !configHasPermission(cfg.config) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  OpenCodePermissionEnvVar,
@@ -831,7 +831,7 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 			// OPENCODE_PERMISSION env var on the server, so no permission.asked
 			// events are generated. This gives natural OpenCode TUI-style output
 			// in pod logs.
-			// For interactive HITL sessions, users use `opencode attach` directly.
+			// For interactive sessions, users use `opencode attach` directly.
 			agentCommand = []string{
 				"sh", "-c",
 				fmt.Sprintf(`/tools/opencode run --attach %s --title %s "$(cat %s/task.md)"`, serverURL, shellEscape(sessionTitle), cfg.workspaceDir),
@@ -919,7 +919,7 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 
 // configHasPermission checks if the Agent's OpenCode config JSON contains
 // a "permission" field. When present, the user has explicitly configured
-// permissions (e.g., for HITL), so we should not override with the default
+// permissions (e.g., for interactive sessions), so we should not override with the default
 // all-allow environment variable.
 func configHasPermission(config *string) bool {
 	if config == nil || *config == "" {

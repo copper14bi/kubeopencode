@@ -166,7 +166,6 @@ func (s *Server) setupRoutes() *chi.Mux {
 		taskHandler := handlers.NewTaskHandler(s.k8sClient, s.clientset, s.restConfig)
 		agentHandler := handlers.NewAgentHandler(s.k8sClient)
 		infoHandler := handlers.NewInfoHandler(s.k8sClient)
-		hitlHandler := handlers.NewHITLHandler(s.k8sClient)
 
 		// Register impersonation middleware that creates per-request clients
 		r.Use(s.impersonationMiddleware)
@@ -186,14 +185,6 @@ func (s *Server) setupRoutes() *chi.Mux {
 			r.Delete("/{name}", taskHandler.Delete)
 			r.Post("/{name}/stop", taskHandler.Stop)
 			r.Get("/{name}/logs", taskHandler.GetLogs)
-
-			// HITL endpoints (nested under individual tasks)
-			r.Get("/{name}/events", hitlHandler.StreamEvents)
-			r.Post("/{name}/permission/{id}", hitlHandler.ReplyPermission)
-			r.Post("/{name}/question/{id}", hitlHandler.ReplyQuestion)
-			r.Post("/{name}/question/{id}/reject", hitlHandler.RejectQuestion)
-			r.Post("/{name}/message", hitlHandler.SendMessage)
-			r.Post("/{name}/interrupt", hitlHandler.Interrupt)
 		})
 
 		// Agent endpoints

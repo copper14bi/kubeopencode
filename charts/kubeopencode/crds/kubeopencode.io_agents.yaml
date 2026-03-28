@@ -1711,12 +1711,10 @@ spec:
                       DeploymentName is the name of the Kubernetes Deployment running the server.
                       Format: "{agent-name}-server"
                     type: string
-                  readyReplicas:
-                    description: |-
-                      ReadyReplicas is the number of ready server pods from the Deployment.
-                      For Server-mode, this is typically 0 or 1 (single replica only).
-                    format: int32
-                    type: integer
+                  ready:
+                    description: Ready indicates whether the server deployment is
+                      ready to accept tasks.
+                    type: boolean
                   serviceName:
                     description: |-
                       ServiceName is the name of the Kubernetes Service exposing the server.

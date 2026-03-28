@@ -271,7 +271,7 @@ func resolveAgentServerPod(ctx context.Context, k8sClient client.Client, namespa
 		return "", "", 0, fmt.Errorf("agent %q is not in Server mode (no serverConfig)", agentName)
 	}
 
-	if agent.Status.ServerStatus == nil || agent.Status.ServerStatus.ReadyReplicas == 0 {
+	if agent.Status.ServerStatus == nil || !agent.Status.ServerStatus.Ready {
 		return "", "", 0, fmt.Errorf("agent %q server is not ready", agentName)
 	}
 

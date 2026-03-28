@@ -110,7 +110,7 @@ func runTaskSubmit(cmd *cobra.Command, args []string) error {
 
 func createSession(client *http.Client, serverURL string) (string, error) {
 	// Create session with all permissions allowed.
-	// Tasks are non-interactive — they run to completion without HITL.
+	// Tasks are non-interactive — they run to completion.
 	// For interactive sessions, users use `opencode attach` directly.
 	payload := `{"permission":{"*":"allow"}}`
 	resp, err := client.Post(serverURL+"/session", "application/json", bytes.NewBufferString(payload))

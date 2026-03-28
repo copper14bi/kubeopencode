@@ -780,7 +780,7 @@ status:
     deploymentName: slack-agent-server
     serviceName: slack-agent
     url: http://slack-agent.platform-agents.svc.cluster.local:4096
-    readyReplicas: 1
+    ready: true
   conditions:
     - type: ServerReady
       status: "True"

@@ -101,10 +101,9 @@ type ServerStatus struct {
 	// +optional
 	URL string `json:"url,omitempty"`
 
-	// ReadyReplicas is the number of ready server pods from the Deployment.
-	// For Server-mode, this is typically 0 or 1 (single replica only).
+	// Ready indicates whether the server deployment is ready to accept tasks.
 	// +optional
-	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
+	Ready bool `json:"ready,omitempty"`
 }
 
 // AgentSpec defines agent configuration

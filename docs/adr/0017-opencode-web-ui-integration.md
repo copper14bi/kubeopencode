@@ -12,7 +12,7 @@ KubeOpenCode supports **server-mode agents** — persistent OpenCode servers run
 (see ADR 0011). Users interact with these agents through:
 
 1. **CLI**: `kubeopencode agent attach` with kubectl port-forward or proxy mode
-2. **Web UI (HITLPanel)**: Limited SSE event streaming in the KubeOpenCode dashboard (ADR 0016)
+2. **Web Terminal**: Browser-based terminal access via xterm.js (ADR 0018)
 
 Neither provides the full OpenCode development experience in the browser. Users must install
 the CLI, have kubectl access, and work from the terminal. The goal is to let users interact
@@ -224,7 +224,7 @@ could inject arbitrary URLs, enabling Server-Side Request Forgery against intern
   - Host must end with `.svc.cluster.local` (rejects external hosts, IPs, localhost)
   - No userinfo allowed (`user:pass@host` rejected)
 - Called in both `resolveAgentServerURL()` (used by web and proxy handlers) and
-  `getServerURL()` (used by HITL handler) — all proxy paths are covered.
+  `getServerURL()` — all proxy paths are covered.
 - 13 unit tests in `common_test.go` covering valid URLs, wrong scheme, external hosts,
   cloud metadata endpoint, userinfo injection, etc.
 

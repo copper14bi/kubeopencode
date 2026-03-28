@@ -241,39 +241,6 @@ export const api = {
     return response.text();
   },
 
-  // HITL - Human-in-the-Loop endpoints
-  getTaskEventsUrl: (namespace: string, name: string) =>
-    `${API_BASE}/namespaces/${namespace}/tasks/${name}/events`,
-
-  replyPermission: (namespace: string, taskName: string, permissionId: string, reply: 'once' | 'always' | 'reject') =>
-    request<{ status: string }>(`/namespaces/${namespace}/tasks/${taskName}/permission/${permissionId}`, {
-      method: 'POST',
-      body: JSON.stringify({ reply }),
-    }),
-
-  replyQuestion: (namespace: string, taskName: string, questionId: string, answers: string[][]) =>
-    request<{ status: string }>(`/namespaces/${namespace}/tasks/${taskName}/question/${questionId}`, {
-      method: 'POST',
-      body: JSON.stringify({ answers }),
-    }),
-
-  rejectQuestion: (namespace: string, taskName: string, questionId: string) =>
-    request<{ status: string }>(`/namespaces/${namespace}/tasks/${taskName}/question/${questionId}/reject`, {
-      method: 'POST',
-    }),
-
-  sendMessage: (namespace: string, taskName: string, sessionId: string, message: string) =>
-    request<{ status: string }>(`/namespaces/${namespace}/tasks/${taskName}/message`, {
-      method: 'POST',
-      body: JSON.stringify({ sessionId, message }),
-    }),
-
-  interruptTask: (namespace: string, taskName: string, sessionId: string) =>
-    request<{ status: string }>(`/namespaces/${namespace}/tasks/${taskName}/interrupt`, {
-      method: 'POST',
-      body: JSON.stringify({ sessionId }),
-    }),
-
 };
 
 export default api;

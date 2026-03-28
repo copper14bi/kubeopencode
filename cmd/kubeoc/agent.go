@@ -132,12 +132,12 @@ func runAgentAttachServiceProxy(ctx context.Context, namespace, agentName string
 		localPort = int(agentPort)
 	}
 
-	if agent.Status.ServerStatus == nil || agent.Status.ServerStatus.ReadyReplicas == 0 {
+	if agent.Status.ServerStatus == nil || !agent.Status.ServerStatus.Ready {
 		deploymentName := controller.ServerDeploymentName(agentName)
-		return fmt.Errorf("agent %q server is not ready (0 ready replicas)\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
+		return fmt.Errorf("agent %q server is not ready\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
 	}
 
-	fmt.Printf("Agent ready (%d replicas)\n", agent.Status.ServerStatus.ReadyReplicas)
+	fmt.Println("Agent ready")
 
 	// Create authenticated transport for kube-apiserver
 	transport, err := rest.TransportFor(cfg)
@@ -282,11 +282,11 @@ func runAgentAttachPortForward(ctx context.Context, namespace, agentName string,
 		localPort = int(serverPort)
 	}
 
-	if agent.Status.ServerStatus == nil || agent.Status.ServerStatus.ReadyReplicas == 0 {
-		return fmt.Errorf("agent %q server is not ready (0 ready replicas)\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
+	if agent.Status.ServerStatus == nil || !agent.Status.ServerStatus.Ready {
+		return fmt.Errorf("agent %q server is not ready\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
 	}
 
-	fmt.Printf("Agent found: %s (port %d, %d ready replicas)\n", deploymentName, serverPort, agent.Status.ServerStatus.ReadyReplicas)
+	fmt.Printf("Agent found: %s (port %d)\n", deploymentName, serverPort)
 
 	if !isPortAvailable(localPort) {
 		return fmt.Errorf("local port %d is already in use\n  Use --local-port to specify a different port", localPort)

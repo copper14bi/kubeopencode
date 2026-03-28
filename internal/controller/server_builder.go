@@ -90,7 +90,7 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 
 	// Set OPENCODE_PERMISSION only if the Agent config does not include custom permissions.
 	// When the config has a "permission" field, the user has explicitly configured
-	// permission behavior (e.g., "ask" mode for HITL), so we must not override it.
+	// permission behavior (e.g., "ask" mode for interactive sessions), so we must not override it.
 	if !configHasPermission(agentCfg.config) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  OpenCodePermissionEnvVar,

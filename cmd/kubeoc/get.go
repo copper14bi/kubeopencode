@@ -78,7 +78,7 @@ Examples:
 
 				if agent.Spec.ServerConfig != nil {
 					mode = "Server"
-					if agent.Status.ServerStatus != nil && agent.Status.ServerStatus.ReadyReplicas > 0 {
+					if agent.Status.ServerStatus != nil && agent.Status.ServerStatus.Ready {
 						status = "Ready"
 					} else {
 						status = "Not Ready"
