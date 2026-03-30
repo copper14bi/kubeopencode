@@ -2,6 +2,119 @@
 
 This document covers the key features of KubeOpenCode.
 
+## Server Mode (Live Agents)
+
+Server Mode is KubeOpenCode's most powerful feature — it lets you run AI agents as persistent services on Kubernetes, available for interactive use anytime.
+
+### Why Server Mode?
+
+- **Zero cold start**: The agent is always running. No waiting for container startup when you need help.
+- **Shared context**: Pre-load codebases, documentation, and organizational standards. All tasks share the same context.
+- **Interactive access**: Connect via web terminal or CLI for real-time pair programming.
+- **Session persistence**: Conversation history survives pod restarts (crashes, node drains, upgrades).
+- **Team-shared agents**: One agent serves your entire team — consistent configuration, centralized credential management.
+
+### Use Cases
+
+| Use Case | Description |
+|----------|-------------|
+| **Team coding assistant** | A shared agent pre-loaded with your monorepo and coding standards. Team members attach via CLI to get interactive help. |
+| **Slack/ChatOps bot** | An always-on agent that responds to Slack messages, creating PRs and fixing issues on demand. |
+| **Code review agent** | A persistent agent that reviews PRs as they come in, leveraging shared context about your codebase. |
+| **On-call assistant** | An agent with production runbooks and monitoring dashboards pre-loaded, ready to help debug incidents. |
+
+### Setup
+
+Add `serverConfig` to your Agent spec to enable Server Mode:
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: team-agent
+spec:
+  profile: "Team development agent"
+  executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  serverConfig:
+    port: 4096                    # OpenCode server port (default: 4096)
+    persistence:
+      sessions:
+        size: "2Gi"               # Persist conversation history
+  contexts:
+    - name: codebase
+      type: Git
+      git:
+        repository: https://github.com/your-org/your-repo.git
+        ref: main
+      mountPath: code
+  credentials:
+    - name: api-key
+      secretRef:
+        name: ai-credentials
+        key: api-key
+      env: OPENCODE_API_KEY
+```
+
+The controller automatically creates:
+- A **Deployment** running `opencode serve` (persistent server)
+- A **Service** for in-cluster access (e.g., `http://team-agent.kubeopencode-system.svc.cluster.local:4096`)
+
+### Interacting with Live Agents
+
+**CLI attach** (connects through kube-apiserver service proxy — no Ingress or port-forward needed):
+
+```bash
+kubeoc agent attach team-agent -n kubeopencode-system
+```
+
+**Web Terminal**: Access the agent's OpenCode TUI directly from the KubeOpenCode dashboard at `http://localhost:2746`.
+
+**Programmatic Tasks**: Submit Tasks as usual — they run on the persistent server via `--attach` flag instead of creating new Pods:
+
+```bash
+kubectl apply -f task.yaml
+```
+
+### Server Mode vs Pod Mode
+
+| Aspect | Pod Mode (default) | Server Mode |
+|--------|-------------------|-------------|
+| Lifecycle | New Pod per Task | Persistent Deployment + Pod per Task |
+| Command | `opencode run "task"` | `opencode run --attach <url> "task"` |
+| Cold start | Yes (container startup) | No (server already running) |
+| Context sharing | None (isolated Pods) | Shared across Tasks via server |
+| Interaction | Logs only | Web Terminal, CLI attach, API |
+| Best for | Batch operations, CI/CD | Interactive coding, team agents |
+
+### Server Status
+
+Monitor your live agent's health:
+
+```bash
+kubectl get agent team-agent -o wide
+# NAME         PROFILE                  MODE     STATUS
+# team-agent   Team development agent   Server   Ready
+```
+
+The Agent status includes server details:
+```yaml
+status:
+  serverStatus:
+    deploymentName: team-agent-server
+    serviceName: team-agent
+    url: http://team-agent.kubeopencode-system.svc.cluster.local:4096
+    ready: true
+  conditions:
+    - type: ServerReady
+      status: "True"
+    - type: ServerHealthy
+      status: "True"
+```
+
+See [Getting Started](getting-started.md) for a complete Server Mode walkthrough.
+
 ## Flexible Context System
 
 Tasks and Agents use inline **ContextItem** to provide additional context to AI agents.
@@ -485,15 +598,55 @@ spec:
           effect: "NoSchedule"
 ```
 
-## Interactive Agent Sessions
+## Session Persistence (Server Mode)
 
-For Server-mode Agents, you can interact with running agents using these tools:
+By default, Server-mode Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), all OpenCode session data is lost.
 
-- **Web Terminal**: Access the agent's OpenCode TUI directly from the KubeOpenCode dashboard
-- **`kubeoc agent attach`**: Connect to the agent from the CLI
-- **`opencode attach`**: Direct OpenCode TUI connection via port-forward
+Session persistence stores the OpenCode SQLite database on a PersistentVolumeClaim (PVC), so conversation history survives pod restarts. See [Server Mode (Live Agents)](#server-mode-live-agents) above for the full Server Mode overview.
 
-See [Getting Started](getting-started.md) for detailed usage instructions.
+### Configuration
+
+Add `persistence.sessions` to your Agent's `serverConfig`:
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: persistent-agent
+spec:
+  executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  serverConfig:
+    port: 4096
+    persistence:
+      sessions:
+        storageClassName: "gp3"   # optional, uses cluster default if omitted
+        size: "2Gi"               # default: 1Gi
+```
+
+### How It Works
+
+When `persistence.sessions` is configured:
+
+1. The Agent controller creates a PVC named `{agent-name}-server-sessions`
+2. The PVC is mounted at `/data/sessions` in the server container
+3. The `OPENCODE_DB` environment variable is set to `/data/sessions/opencode.db`
+4. OpenCode writes all session data to the persistent volume
+5. On pod restart, the existing session database is reused
+
+### PVC Lifecycle
+
+- The PVC is created with an `OwnerReference` to the Agent
+- When the Agent is deleted, the PVC is automatically garbage-collected
+- To retain data after Agent deletion, configure the StorageClass with `reclaimPolicy: Retain`
+- PVC specs are immutable after creation; to change size or storage class, delete and recreate the Agent
+
+### Limitations
+
+- Only session data (SQLite database) is persisted
+- Workspace files (git repos, AI-modified files) use EmptyDir and are re-initialized on restart
+- Workspace persistence is planned for a future release
 
 ## Next Steps
 

@@ -54,7 +54,132 @@ The Web UI provides:
 - **Task Creation**: Create new Tasks with Agent selection
 - **Agent Browser**: View available Agents and their configurations
 
-## Example Usage
+## Choose Your Mode
+
+KubeOpenCode supports two execution modes. Choose the one that fits your use case:
+
+| | **Server Mode (Live Agent)** | **Pod Mode (Batch Tasks)** |
+|---|---|---|
+| **What** | Persistent AI agent running as a service | Ephemeral Pod per Task |
+| **Best for** | Interactive coding, team-shared agents, Slack bots | Batch operations, CI/CD pipelines, one-off tasks |
+| **Cold start** | None (server always running) | Yes (container startup per Task) |
+| **Context sharing** | Shared across Tasks via server | Isolated per Task |
+| **Interaction** | Web Terminal, CLI attach, API | Logs only |
+
+## Server Mode: Live Agent (Recommended for Getting Started)
+
+Server Mode deploys a persistent AI agent as a Kubernetes service. Your team can interact with it anytime — through the web terminal, CLI, or by submitting Tasks programmatically.
+
+### 1. Create a Server-Mode Agent
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: dev-agent
+  namespace: kubeopencode-system
+spec:
+  profile: "Interactive development agent"
+  executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+
+  # Enable Server Mode — creates a persistent Deployment + Service
+  serverConfig:
+    port: 4096
+    persistence:
+      sessions:
+        size: "2Gi"   # Persist conversation history across restarts
+
+  credentials:
+    - name: api-key
+      secretRef:
+        name: ai-credentials
+        key: api-key
+      env: OPENCODE_API_KEY
+
+  # Optional: pre-load your codebase
+  contexts:
+    - name: source-code
+      type: Git
+      git:
+        repository: https://github.com/your-org/your-repo.git
+        ref: main
+      mountPath: code
+```
+
+### 2. Wait for the Agent to Be Ready
+
+```bash
+# Watch the Agent status
+kubectl get agents -n kubeopencode-system -w
+
+# NAME        PROFILE                         MODE     STATUS
+# dev-agent   Interactive development agent    Server   Ready
+
+# Check the created resources
+kubectl get deploy,svc -n kubeopencode-system -l kubeopencode.io/agent=dev-agent
+```
+
+The controller automatically creates:
+- A **Deployment** running the OpenCode server
+- A **Service** for internal cluster access
+
+### 3. Interact with the Live Agent
+
+**Option A: CLI (recommended)**
+
+```bash
+# Install the CLI
+go install github.com/kubeopencode/kubeopencode/cmd/kubeoc@latest
+
+# Attach to the agent — opens an interactive OpenCode terminal
+kubeoc agent attach dev-agent -n kubeopencode-system
+```
+
+**Option B: Web Terminal**
+
+```bash
+# Port forward to the KubeOpenCode dashboard
+kubectl port-forward -n kubeopencode-system svc/kubeopencode-server 2746:2746
+
+# Open http://localhost:2746, navigate to the agent, and click "Terminal"
+```
+
+**Option C: Submit Tasks programmatically**
+
+Even in Server Mode, you can submit Tasks. They run on the persistent server instead of creating new Pods:
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Task
+metadata:
+  name: fix-bug-123
+  namespace: kubeopencode-system
+spec:
+  agentRef:
+    name: dev-agent
+  description: |
+    Fix the null pointer exception in UserService.java.
+    The bug is reported in issue #123.
+```
+
+### 4. Monitor and Manage
+
+```bash
+# View agent server logs
+kubectl logs -n kubeopencode-system deploy/dev-agent-server -f
+
+# Check server health
+kubectl get agent dev-agent -n kubeopencode-system -o jsonpath='{.status.serverStatus}'
+
+# Stop the agent (scales down the Deployment)
+kubectl delete agent dev-agent -n kubeopencode-system
+```
+
+## Pod Mode: Batch Tasks
+
+Pod Mode creates an ephemeral Pod for each Task — ideal for batch operations, CI/CD pipelines, and one-off tasks.
 
 ### 1. Create an Agent
 

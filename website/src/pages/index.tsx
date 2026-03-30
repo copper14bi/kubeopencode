@@ -9,13 +9,32 @@ import CodeBlock from '@theme/CodeBlock';
 
 import styles from './index.module.css';
 
+const agentYaml = `apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: dev-agent
+spec:
+  profile: "Interactive development agent"
+  workspaceDir: /workspace
+  serverConfig:
+    port: 4096
+    persistence:
+      sessions:
+        size: "2Gi"
+  credentials:
+    - name: api-key
+      secretRef:
+        name: ai-credentials
+        key: api-key
+      env: OPENCODE_API_KEY`;
+
 const exampleYaml = `apiVersion: kubeopencode.io/v1alpha1
 kind: Task
 metadata:
   name: update-dependencies
 spec:
   agentRef:
-    name: default
+    name: dev-agent
   description: |
     Update all dependencies to latest versions.
     Run tests and create a pull request.`;
@@ -30,9 +49,9 @@ function HomepageHeader() {
         </Heading>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <p className={styles.heroDescription}>
-          Deploy, manage, and govern AI coding agents at scale on Kubernetes.
-          Built on OpenCode &mdash; turning individual AI capabilities into a shared platform
-          for your entire engineering organization.
+          Run AI coding agents as live services on Kubernetes. Deploy persistent agents
+          your team can interact with anytime &mdash; or run batch tasks at scale.
+          Built on OpenCode, designed for teams and enterprise.
         </p>
         <div className={styles.buttons}>
           <Link
@@ -58,11 +77,32 @@ function QuickExample() {
       <div className="container">
         <div className="row">
           <div className="col col--6">
-            <Heading as="h2">Define Tasks as YAML</Heading>
+            <Heading as="h2">Deploy a Live Agent in Minutes</Heading>
             <p>
-              KubeOpenCode brings AI coding agents into your Kubernetes cluster.
-              Define what you want done as a Task, configure how it runs with an
-              Agent, and let the controller handle execution.
+              Run AI coding agents as persistent services on Kubernetes.
+              Your team can interact with them anytime &mdash; through the
+              web terminal, CLI, or by submitting Tasks.
+            </p>
+            <ul>
+              <li>Zero cold start &mdash; agent is always running</li>
+              <li>Interactive terminal access via CLI or web</li>
+              <li>Shared context across all tasks</li>
+              <li>Session history persists across restarts</li>
+            </ul>
+          </div>
+          <div className="col col--6">
+            <CodeBlock language="yaml" title="agent.yaml">
+              {agentYaml}
+            </CodeBlock>
+          </div>
+        </div>
+        <div className="row" style={{marginTop: '2rem'}}>
+          <div className="col col--6">
+            <Heading as="h2">Submit Tasks as YAML</Heading>
+            <p>
+              Define what you want done as a Task. Works in both modes &mdash;
+              Server Mode runs tasks on the persistent agent, Pod Mode creates
+              an ephemeral Pod per task for batch operations.
             </p>
             <ul>
               <li>No new tools to learn &mdash; just <code>kubectl apply</code></li>

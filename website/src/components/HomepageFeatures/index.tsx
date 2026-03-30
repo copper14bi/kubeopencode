@@ -11,23 +11,23 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
+    title: 'Live Agents',
+    icon: '\u26A1',
+    description: (
+      <>
+        Run AI agents as persistent services with Server Mode. Interactive
+        terminal access, shared context across tasks, zero cold start &mdash;
+        perfect for team-shared coding assistants and always-on agents.
+      </>
+    ),
+  },
+  {
     title: 'Kubernetes-Native',
     icon: '\u2638\uFE0F',
     description: (
       <>
         Declarative CRDs, GitOps-friendly, works with Helm, Kustomize, and
         ArgoCD. No new tools to learn &mdash; just <code>kubectl apply</code>.
-      </>
-    ),
-  },
-  {
-    title: 'Built for Teams',
-    icon: '\uD83D\uDC65',
-    description: (
-      <>
-        Shared agent configurations, batch operations across repositories,
-        concurrency control, and centralized credential management &mdash; so
-        your entire team can leverage AI agents with consistent standards.
       </>
     ),
   },
@@ -43,13 +43,13 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Zero Dependencies',
-    icon: '\uD83D\uDCE6',
+    title: 'Built for Teams',
+    icon: '\uD83D\uDC65',
     description: (
       <>
-        No PostgreSQL, no Redis, no message queues. Uses etcd for state and
-        Pods for execution &mdash; your existing Kubernetes cluster is all
-        you need.
+        Shared agent configurations, batch operations across repositories,
+        concurrency control, and centralized credential management &mdash; so
+        your entire team can leverage AI agents with consistent standards.
       </>
     ),
   },

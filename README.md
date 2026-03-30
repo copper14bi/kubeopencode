@@ -23,6 +23,7 @@ KubeOpenCode is a Kubernetes-native agent platform that enables teams to deploy,
 
 **Why KubeOpenCode?**
 
+- **Live Agents on Kubernetes**: Run AI agents as persistent services with Server Mode — interactive terminal access, shared context across tasks, zero cold start. Perfect for team-shared coding assistants, Slack bots, and always-on development agents.
 - **For Teams**: Shared agent configurations, batch operations across repositories, concurrency control, and centralized credential management — so your entire team can leverage AI agents with consistent standards.
 - **For Enterprise**: RBAC, private registry support, corporate proxy integration, custom CA certificates, pod security policies, and audit-ready infrastructure — meeting the governance and compliance requirements of enterprise environments.
 - **Kubernetes-Native**: Declarative CRDs, GitOps-friendly, works with Helm/Kustomize/ArgoCD — no new tools to learn, just `kubectl apply`.
@@ -63,7 +64,9 @@ KubeOpenCode is a Kubernetes-native agent platform that enables teams to deploy,
 ### Core Concepts
 
 - **Task**: Single task execution (the primary API)
-- **Agent**: AI agent configuration (HOW to execute)
+- **Agent**: AI agent configuration (HOW to execute) — supports two modes:
+  - **Pod Mode** (default): Ephemeral Pod per Task, ideal for batch operations
+  - **Server Mode**: Persistent agent service with interactive access, ideal for live coding assistants
 - **KubeOpenCodeConfig**: System-level configuration (optional)
 
 > **Note**: Workflow orchestration and webhook triggers have been delegated to Argo Workflows and Argo Events respectively. KubeOpenCode focuses on the core Task/Agent abstraction.
@@ -127,7 +130,44 @@ kubectl get tasks -n kubeopencode-system -w
 kubectl logs $(kubectl get task my-task -o jsonpath='{.status.podName}') -n kubeopencode-system
 ```
 
-See the [Getting Started Guide](docs/getting-started.md) for detailed examples including batch operations and web terminal access.
+### Live Agent (Server Mode)
+
+Deploy a persistent AI agent that your team can interact with anytime:
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: team-agent
+  namespace: kubeopencode-system
+spec:
+  profile: "Always-on development agent for the team"
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  serverConfig:
+    port: 4096
+    persistence:
+      sessions:
+        size: "2Gi"
+  credentials:
+    - name: api-key
+      secretRef:
+        name: ai-credentials
+        key: api-key
+      env: OPENCODE_API_KEY
+```
+
+```bash
+# The controller automatically creates a Deployment + Service
+kubectl get agents -n kubeopencode-system
+# NAME         PROFILE                                  MODE     STATUS
+# team-agent   Always-on development agent for the team Server   Ready
+
+# Attach to the live agent from your terminal
+kubeoc agent attach team-agent -n kubeopencode-system
+```
+
+See the [Getting Started Guide](docs/getting-started.md) for detailed examples including Server Mode setup, batch operations, and interactive access.
 
 ### CLI
 
