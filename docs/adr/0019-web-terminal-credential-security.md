@@ -1,6 +1,6 @@
 # ADR 0019: Web Terminal Credential Security Strategy
 
-**Status:** Accepted
+**Status:** Accepted (Implemented)
 **Date:** 2026-03-27
 **Related:** [ADR 0018](0018-web-terminal-replaces-web-ui.md)
 

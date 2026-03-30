@@ -4,7 +4,7 @@
 
 ## Status
 
-Accepted (self-hosted mode implemented, iframe embedding in progress)
+Superseded by [ADR 0018](0018-web-terminal-replaces-web-ui.md) (2026-03-27)
 
 ## Context
 

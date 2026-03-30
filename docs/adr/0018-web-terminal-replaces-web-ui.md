@@ -1,6 +1,6 @@
 # ADR 0018: Web Terminal Replaces OpenCode Web UI
 
-**Status:** Accepted
+**Status:** Accepted (Implemented)
 **Date:** 2026-03-27
 **Supersedes:** [ADR 0017](0017-opencode-web-ui-integration.md)
 
