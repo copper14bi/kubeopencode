@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '../api/client';
-import StatusBadge from './StatusBadge';
-import TimeAgo from './TimeAgo';
 import ToastContainer from './ToastContainer';
 import logoImg from '../assets/logo.png';
 
@@ -18,8 +16,6 @@ function useServerVersion() {
 
 function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [tasksExpanded, setTasksExpanded] = useState(true);
-  const [agentsExpanded, setAgentsExpanded] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const location = useLocation();
   const serverVersion = useServerVersion();
@@ -39,7 +35,12 @@ function Layout() {
   const agents = agentsData?.agents || [];
   const runningCount = tasks.filter(t => t.phase === 'Running').length;
 
-  const isActiveRoute = (path: string) => location.pathname === path;
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
+      isActive
+        ? 'bg-primary-50 text-primary-700 font-medium'
+        : 'text-sidebar-muted hover:text-sidebar-text hover:bg-sidebar-hover'
+    }`;
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -75,173 +76,71 @@ function Layout() {
       </div>
 
       {/* Navigation */}
-      <div className="px-3 pt-2 pb-1 flex-shrink-0">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) =>
-            `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
-              isActive
-                ? 'bg-primary-50 text-primary-700 font-medium'
-                : 'text-sidebar-muted hover:text-sidebar-text hover:bg-sidebar-hover'
-            }`
-          }
-        >
+      <div className="px-3 pt-2 pb-3 flex-shrink-0 space-y-0.5">
+        <NavLink to="/" end className={navLinkClass}>
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           Dashboard
         </NavLink>
-      </div>
 
-      {/* Scrollable sections */}
-      <div className="flex-1 overflow-y-auto sidebar-scroll px-3 pb-3">
-        {/* Tasks Section */}
-        <div className="mt-1">
-          <button
-            onClick={() => setTasksExpanded(!tasksExpanded)}
-            className="flex items-center justify-between w-full px-3 py-2 text-xs font-display font-medium text-sidebar-muted uppercase tracking-wider hover:text-sidebar-text transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <span>Tasks</span>
-              {runningCount > 0 && (
-                <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 text-[10px] font-semibold normal-case tracking-normal">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-500" />
-                  </span>
-                  {runningCount}
-                </span>
-              )}
-            </div>
-            <svg
-              className={`w-3 h-3 transition-transform duration-200 ${tasksExpanded ? 'rotate-0' : '-rotate-90'}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {tasksExpanded && (
-            <div className="space-y-0.5 animate-fade-in">
-              {tasks.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-sidebar-muted/60">No tasks yet</p>
-              ) : (
-                tasks.map((task) => (
-                  <NavLink
-                    key={`${task.namespace}/${task.name}`}
-                    to={`/tasks/${task.namespace}/${task.name}`}
-                    onClick={() => setMobileSidebarOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group ${
-                        isActive
-                          ? 'bg-primary-50 text-primary-700 font-medium'
-                          : 'text-slate-600 hover:text-sidebar-text hover:bg-sidebar-hover'
-                      }`
-                    }
-                  >
-                    <TaskStatusDot phase={task.phase} />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-[13px]">{task.name}</p>
-                      <p className="text-[10px] text-sidebar-muted truncate">
-                        {task.namespace}
-                      </p>
-                    </div>
-                    <span className="text-[10px] text-sidebar-muted/60 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                      <TimeAgo date={task.createdAt} />
-                    </span>
-                  </NavLink>
-                ))
-              )}
-              <NavLink
-                to="/tasks"
-                onClick={() => setMobileSidebarOpen(false)}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs text-sidebar-muted hover:text-primary-600 transition-colors"
-              >
-                View all tasks
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </NavLink>
-            </div>
-          )}
-        </div>
-
-        {/* Agents Section */}
-        <div className="mt-3">
-          <button
-            onClick={() => setAgentsExpanded(!agentsExpanded)}
-            className="flex items-center justify-between w-full px-3 py-2 text-xs font-display font-medium text-sidebar-muted uppercase tracking-wider hover:text-sidebar-text transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <span>Agents</span>
-              <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-[10px] text-sidebar-muted font-semibold normal-case tracking-normal">
-                {agents.length}
+        <NavLink
+          to="/tasks"
+          className={({ isActive }) =>
+            `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
+              isActive || location.pathname.startsWith('/tasks/')
+                ? 'bg-primary-50 text-primary-700 font-medium'
+                : 'text-sidebar-muted hover:text-sidebar-text hover:bg-sidebar-hover'
+            }`
+          }
+          onClick={() => setMobileSidebarOpen(false)}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="flex-1">Tasks</span>
+          {runningCount > 0 && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 text-[10px] font-semibold">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary-500" />
               </span>
-            </div>
-            <svg
-              className={`w-3 h-3 transition-transform duration-200 ${agentsExpanded ? 'rotate-0' : '-rotate-90'}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {agentsExpanded && (
-            <div className="space-y-0.5 animate-fade-in">
-              {agents.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-sidebar-muted/60">No agents configured</p>
-              ) : (
-                agents.map((agent) => (
-                  <NavLink
-                    key={`${agent.namespace}/${agent.name}`}
-                    to={`/agents/${agent.namespace}/${agent.name}`}
-                    onClick={() => setMobileSidebarOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group ${
-                        isActive
-                          ? 'bg-primary-50 text-primary-700 font-medium'
-                          : 'text-slate-600 hover:text-sidebar-text hover:bg-sidebar-hover'
-                      }`
-                    }
-                  >
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                      agent.mode === 'Server' ? 'bg-violet-500' : 'bg-primary-400'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-[13px]">{agent.name}</p>
-                      <p className="text-[10px] text-sidebar-muted truncate">
-                        {agent.namespace}
-                      </p>
-                    </div>
-                    {agent.mode === 'Server' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                        server
-                      </span>
-                    )}
-                  </NavLink>
-                ))
-              )}
-              <NavLink
-                to="/agents"
-                onClick={() => setMobileSidebarOpen(false)}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs text-sidebar-muted hover:text-primary-600 transition-colors"
-              >
-                View all agents
-                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </NavLink>
-            </div>
+              {runningCount}
+            </span>
           )}
-        </div>
+        </NavLink>
+
+        <NavLink
+          to="/agents"
+          className={({ isActive }) =>
+            `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
+              isActive || location.pathname.startsWith('/agents/')
+                ? 'bg-primary-50 text-primary-700 font-medium'
+                : 'text-sidebar-muted hover:text-sidebar-text hover:bg-sidebar-hover'
+            }`
+          }
+          onClick={() => setMobileSidebarOpen(false)}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="2" x2="12" y2="6" />
+            <circle cx="12" cy="2" r="1" fill="currentColor" />
+            <rect x="4" y="6" width="16" height="12" rx="2" />
+            <circle cx="9" cy="12" r="1.5" />
+            <circle cx="15" cy="12" r="1.5" />
+            <line x1="9" y1="16" x2="15" y2="16" />
+            <line x1="2" y1="10" x2="4" y2="10" />
+            <line x1="20" y1="10" x2="22" y2="10" />
+          </svg>
+          <span className="flex-1">Agents</span>
+          {agents.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-[10px] text-sidebar-muted font-semibold">
+              {agents.length}
+            </span>
+          )}
+        </NavLink>
       </div>
+
+      <div className="flex-1" />
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-sidebar-border flex-shrink-0">
@@ -334,17 +233,12 @@ function Layout() {
               title="Agents"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                {/* antenna */}
                 <line x1="12" y1="2" x2="12" y2="6" />
                 <circle cx="12" cy="2" r="1" fill="currentColor" />
-                {/* head */}
                 <rect x="4" y="6" width="16" height="12" rx="2" />
-                {/* eyes */}
                 <circle cx="9" cy="12" r="1.5" />
                 <circle cx="15" cy="12" r="1.5" />
-                {/* mouth */}
                 <line x1="9" y1="16" x2="15" y2="16" />
-                {/* ears */}
                 <line x1="2" y1="10" x2="4" y2="10" />
                 <line x1="20" y1="10" x2="22" y2="10" />
               </svg>
@@ -392,28 +286,6 @@ function Layout() {
 
       <ToastContainer />
     </div>
-  );
-}
-
-function TaskStatusDot({ phase }: { phase: string }) {
-  const lower = phase?.toLowerCase() || 'pending';
-  const colorMap: Record<string, string> = {
-    running: 'bg-primary-500',
-    completed: 'bg-emerald-500',
-    failed: 'bg-red-500',
-    queued: 'bg-amber-500',
-    pending: 'bg-slate-400',
-  };
-  const color = colorMap[lower] || 'bg-slate-400';
-  const isAnimated = lower === 'running' || lower === 'queued';
-
-  return (
-    <span className="relative flex h-2 w-2 flex-shrink-0">
-      {isAnimated && (
-        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`} />
-      )}
-      <span className={`relative inline-flex rounded-full h-2 w-2 ${color}`} />
-    </span>
   );
 }
 
