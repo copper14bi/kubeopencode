@@ -598,15 +598,15 @@ spec:
           effect: "NoSchedule"
 ```
 
-## Session Persistence (Server Mode)
+## Persistence (Server Mode)
 
-By default, Server-mode Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), all OpenCode session data is lost.
+By default, Server-mode Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), session data and workspace files are lost.
 
-Session persistence stores the OpenCode SQLite database on a PersistentVolumeClaim (PVC), so conversation history survives pod restarts. See [Server Mode (Live Agents)](#server-mode-live-agents) above for the full Server Mode overview.
+Persistence stores data on PersistentVolumeClaims (PVCs), so it survives pod restarts. Session and workspace persistence are configured independently. See [Server Mode (Live Agents)](#server-mode-live-agents) above for the full Server Mode overview.
 
 ### Configuration
 
-Add `persistence.sessions` to your Agent's `serverConfig`:
+Add `persistence` to your Agent's `serverConfig`:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -621,19 +621,22 @@ spec:
     port: 4096
     persistence:
       sessions:
-        storageClassName: "gp3"   # optional, uses cluster default if omitted
         size: "2Gi"               # default: 1Gi
+      workspace:
+        size: "20Gi"              # default: 10Gi
 ```
 
 ### How It Works
 
-When `persistence.sessions` is configured:
+**Session persistence** (`persistence.sessions`):
+- A PVC (`{agent-name}-server-sessions`) is created and mounted at `/data/sessions`
+- `OPENCODE_DB` env var is set to `/data/sessions/opencode.db`
+- Conversation history survives pod restarts
 
-1. The Agent controller creates a PVC named `{agent-name}-server-sessions`
-2. The PVC is mounted at `/data/sessions` in the server container
-3. The `OPENCODE_DB` environment variable is set to `/data/sessions/opencode.db`
-4. OpenCode writes all session data to the persistent volume
-5. On pod restart, the existing session database is reused
+**Workspace persistence** (`persistence.workspace`):
+- The workspace EmptyDir is replaced with a PVC (`{agent-name}-server-workspace`)
+- Git-cloned repos, AI-modified files, and in-progress work survive pod restarts
+- git-init skips cloning when the repository already exists on the PVC
 
 ### PVC Lifecycle
 
@@ -644,9 +647,9 @@ When `persistence.sessions` is configured:
 
 ### Limitations
 
-- Only session data (SQLite database) is persisted
-- Workspace files (git repos, AI-modified files) use EmptyDir and are re-initialized on restart
-- Workspace persistence is planned for a future release
+- When workspace persistence is enabled and git-init detects an existing repository, it skips cloning.
+  If the Agent's git ref changes, the existing checkout is not automatically updated.
+- Sessions and workspace can be configured independently (one, both, or neither)
 
 ## Next Steps
 

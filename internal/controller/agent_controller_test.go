@@ -392,6 +392,82 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
+	Context("When creating a Server-mode Agent with workspace persistence", func() {
+		It("Should create a workspace PVC", func() {
+			agentName := "test-workspace-persist-agent"
+
+			By("Creating a Server-mode Agent with workspace persistence")
+			agent := &kubeopenv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: agentNamespace,
+				},
+				Spec: kubeopenv1alpha1.AgentSpec{
+					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "test-agent",
+					ServerConfig: &kubeopenv1alpha1.ServerConfig{
+						Port: 4096,
+						Persistence: &kubeopenv1alpha1.PersistenceConfig{
+							Workspace: &kubeopenv1alpha1.VolumePersistence{
+								Size: "10Gi",
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
+
+			By("Expecting a workspace PVC to be created")
+			pvcName := ServerWorkspacePVCName(agentName)
+			Eventually(func() error {
+				var pvc corev1.PersistentVolumeClaim
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name:      pvcName,
+					Namespace: agentNamespace,
+				}, &pvc)
+			}, timeout, interval).Should(Succeed())
+
+			By("Verifying workspace PVC properties")
+			var pvc corev1.PersistentVolumeClaim
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      pvcName,
+				Namespace: agentNamespace,
+			}, &pvc)).Should(Succeed())
+			Expect(pvc.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
+			storageReq := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+			Expect(storageReq.String()).To(Equal("10Gi"))
+
+			By("Verifying Deployment uses PVC for workspace volume")
+			deploymentName := ServerDeploymentName(agentName)
+			Eventually(func() error {
+				var deployment appsv1.Deployment
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: agentNamespace,
+				}, &deployment)
+			}, timeout, interval).Should(Succeed())
+
+			var deployment appsv1.Deployment
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      deploymentName,
+				Namespace: agentNamespace,
+			}, &deployment)).Should(Succeed())
+
+			var foundWorkspaceVolume bool
+			for _, vol := range deployment.Spec.Template.Spec.Volumes {
+				if vol.Name == WorkspaceVolumeName && vol.PersistentVolumeClaim != nil {
+					foundWorkspaceVolume = true
+					Expect(vol.PersistentVolumeClaim.ClaimName).To(Equal(pvcName))
+				}
+			}
+			Expect(foundWorkspaceVolume).To(BeTrue(), "workspace PVC volume not found in Deployment")
+
+			By("Cleaning up the Agent")
+			Expect(k8sClient.Delete(ctx, agent)).Should(Succeed())
+		})
+	})
+
 	Context("IsServerMode helper function", func() {
 		It("Should correctly identify server mode", func() {
 			serverAgent := &kubeopenv1alpha1.Agent{

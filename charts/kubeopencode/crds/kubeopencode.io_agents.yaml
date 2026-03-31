@@ -2181,8 +2181,26 @@ spec:
                           history survives server pod restarts.
                         properties:
                           size:
-                            default: 1Gi
-                            description: Size of the PVC.
+                            description: |-
+                              Size of the PVC.
+                              If not specified, defaults to 1Gi for sessions and 10Gi for workspace.
+                            type: string
+                          storageClassName:
+                            description: StorageClassName for the PVC. If empty, uses
+                              cluster default StorageClass.
+                            type: string
+                        type: object
+                      workspace:
+                        description: |-
+                          Workspace enables persistent storage for the workspace directory.
+                          When enabled, git-cloned repos, AI-modified files, and in-progress work
+                          survive server pod restarts. Without this, workspace uses EmptyDir and
+                          is re-initialized on every restart (git repos re-cloned by init containers).
+                        properties:
+                          size:
+                            description: |-
+                              Size of the PVC.
+                              If not specified, defaults to 1Gi for sessions and 10Gi for workspace.
                             type: string
                           storageClassName:
                             description: StorageClassName for the PVC. If empty, uses

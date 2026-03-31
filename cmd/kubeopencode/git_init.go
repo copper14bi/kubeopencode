@@ -111,37 +111,44 @@ func runGitInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create root directory: %w", err)
 	}
 
-	// Check if submodule cloning is enabled
-	recurseSubmodules := os.Getenv(envGitRecurseSubmodules) == "true"
-
-	// Build git clone command
-	cloneArgs := []string{"clone", "--depth", strconv.Itoa(depth), "--single-branch"}
-
-	if recurseSubmodules {
-		cloneArgs = append(cloneArgs, "--recurse-submodules")
-		fmt.Println("  Submodules: recursive")
-	}
-
-	// Add branch flag if not HEAD
-	if ref != "HEAD" {
-		cloneArgs = append(cloneArgs, "--branch", ref)
-	}
-
-	cloneArgs = append(cloneArgs, repo, targetDir)
-
-	// Execute git clone
-	cloneCmd := exec.Command("git", cloneArgs...) //nolint:gosec // args are constructed from controlled inputs
-	cloneCmd.Stdout = os.Stdout
-	cloneCmd.Stderr = os.Stderr
-
-	if err := cloneCmd.Run(); err != nil {
-		return fmt.Errorf("git clone failed: %w", err)
-	}
-
-	// Verify clone was successful
+	// When workspace persistence is enabled, the target directory may already
+	// contain a cloned repository from a previous run. Skip cloning if the
+	// .git directory exists to avoid git clone failures on existing directories.
 	gitDir := filepath.Join(targetDir, ".git")
-	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		return fmt.Errorf("clone verification failed: .git directory not found")
+	if _, err := os.Stat(gitDir); err == nil {
+		fmt.Printf("git-init: Repository already exists at %s, skipping clone\n", targetDir)
+	} else {
+		// Check if submodule cloning is enabled
+		recurseSubmodules := os.Getenv(envGitRecurseSubmodules) == "true"
+
+		// Build git clone command
+		cloneArgs := []string{"clone", "--depth", strconv.Itoa(depth), "--single-branch"}
+
+		if recurseSubmodules {
+			cloneArgs = append(cloneArgs, "--recurse-submodules")
+			fmt.Println("  Submodules: recursive")
+		}
+
+		// Add branch flag if not HEAD
+		if ref != "HEAD" {
+			cloneArgs = append(cloneArgs, "--branch", ref)
+		}
+
+		cloneArgs = append(cloneArgs, repo, targetDir)
+
+		// Execute git clone
+		cloneCmd := exec.Command("git", cloneArgs...) //nolint:gosec // args are constructed from controlled inputs
+		cloneCmd.Stdout = os.Stdout
+		cloneCmd.Stderr = os.Stderr
+
+		if err := cloneCmd.Run(); err != nil {
+			return fmt.Errorf("git clone failed: %w", err)
+		}
+
+		// Verify clone was successful
+		if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+			return fmt.Errorf("clone verification failed: .git directory not found")
+		}
 	}
 
 	// Create a shared .gitconfig in the target directory for safe.directory

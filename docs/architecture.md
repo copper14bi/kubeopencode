@@ -821,6 +821,7 @@ Task Controller
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `sessions` | VolumePersistence | nil | Session data (SQLite DB) persistence |
+| `workspace` | VolumePersistence | nil | Workspace directory persistence (git repos, modified files) |
 
 **VolumePersistence Fields:**
 

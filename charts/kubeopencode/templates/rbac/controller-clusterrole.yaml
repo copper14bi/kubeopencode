@@ -97,7 +97,7 @@ rules:
   - update
   - patch
   - delete
-# PersistentVolumeClaims (for Server-mode session persistence)
+# PersistentVolumeClaims (for Server-mode session and workspace persistence)
 - apiGroups:
   - ""
   resources:

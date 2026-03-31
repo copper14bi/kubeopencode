@@ -684,10 +684,10 @@ status:
 
 **Note:** Task API is identical for both modes. Both create Pods; Server mode uses `--attach` flag.
 
-**Session Persistence:**
+**Persistence:**
 
-By default, Server mode uses ephemeral storage — session data is lost when the server pod restarts.
-To persist OpenCode session history (conversation data stored in SQLite), configure `persistence.sessions`:
+By default, Server mode uses ephemeral storage — session data and workspace files are lost when the
+server pod restarts. Persistence can be configured independently for sessions and workspace:
 
 ```yaml
 serverConfig:
@@ -696,16 +696,23 @@ serverConfig:
     sessions:
       storageClassName: "gp3"   # optional, uses cluster default if omitted
       size: "2Gi"               # default: 1Gi
+    workspace:
+      storageClassName: "gp3"   # optional, uses cluster default if omitted
+      size: "20Gi"              # default: 10Gi
 ```
 
-When enabled:
+**Session persistence** (`persistence.sessions`):
 - A PVC (`{agent-name}-server-sessions`) is created and mounted at `/data/sessions`
 - `OPENCODE_DB` env var is set to `/data/sessions/opencode.db`
-- Session history survives pod restarts (crash, node drain, upgrade)
-- PVC is garbage-collected via OwnerReference when the Agent is deleted
+- Conversation history survives pod restarts
 
-**Note:** Only session data (SQLite DB) is persisted. Workspace files use EmptyDir and are re-initialized
-on restart (git repos re-cloned by init containers). Workspace persistence is reserved for future implementation.
+**Workspace persistence** (`persistence.workspace`):
+- The workspace EmptyDir is replaced with a PVC (`{agent-name}-server-workspace`)
+- Git-cloned repos, AI-modified files, and in-progress work survive pod restarts
+- git-init skips cloning when the repository already exists on the PVC
+
+Both PVCs are garbage-collected via OwnerReference when the Agent is deleted.
+Sessions and workspace can be configured independently (one, both, or neither).
 
 **Task Stop:**
 

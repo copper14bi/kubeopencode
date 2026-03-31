@@ -833,4 +833,73 @@ var _ = Describe("Server Mode E2E Tests", Label(LabelServer), func() {
 			Expect(k8sClient.Delete(ctx, agent)).Should(Succeed())
 		})
 	})
+
+	Context("Server Mode Agent - Workspace Persistence", func() {
+		It("should create a workspace PVC when configured", func() {
+			agentName := uniqueName("ws-persist")
+
+			By("Creating Agent with workspace persistence")
+			agent := &kubeopenv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: testNS,
+				},
+				Spec: kubeopenv1alpha1.AgentSpec{
+					ExecutorImage:      echoImage,
+					ServiceAccountName: testServiceAccount,
+					WorkspaceDir:       "/workspace",
+					ServerConfig: &kubeopenv1alpha1.ServerConfig{
+						Port: 4096,
+						Persistence: &kubeopenv1alpha1.PersistenceConfig{
+							Workspace: &kubeopenv1alpha1.VolumePersistence{
+								Size: "1Gi",
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
+
+			By("Waiting for workspace PVC to be created")
+			pvcName := controller.ServerWorkspacePVCName(agentName)
+			pvcKey := types.NamespacedName{Name: pvcName, Namespace: testNS}
+			Eventually(func() bool {
+				pvc := &corev1.PersistentVolumeClaim{}
+				return k8sClient.Get(ctx, pvcKey, pvc) == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying workspace PVC properties")
+			pvc := &corev1.PersistentVolumeClaim{}
+			Expect(k8sClient.Get(ctx, pvcKey, pvc)).Should(Succeed())
+			Expect(pvc.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
+			storageReq := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+			Expect(storageReq.String()).To(Equal("1Gi"))
+
+			By("Verifying Deployment workspace volume is PVC-backed")
+			deploymentKey := types.NamespacedName{Name: controller.ServerDeploymentName(agentName), Namespace: testNS}
+			Eventually(func() bool {
+				deployment := &appsv1.Deployment{}
+				if err := k8sClient.Get(ctx, deploymentKey, deployment); err != nil {
+					return false
+				}
+				for _, vol := range deployment.Spec.Template.Spec.Volumes {
+					if vol.Name == controller.WorkspaceVolumeName &&
+						vol.PersistentVolumeClaim != nil &&
+						vol.PersistentVolumeClaim.ClaimName == pvcName {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, agent)).Should(Succeed())
+
+			By("Verifying workspace PVC is cleaned up via OwnerReference")
+			Eventually(func() bool {
+				pvc := &corev1.PersistentVolumeClaim{}
+				return k8sClient.Get(ctx, pvcKey, pvc) != nil
+			}, timeout, interval).Should(BeTrue())
+		})
+	})
 })

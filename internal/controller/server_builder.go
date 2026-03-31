@@ -48,6 +48,12 @@ const (
 
 	// OpenCodeDBEnvVar is the environment variable name for the OpenCode database path.
 	OpenCodeDBEnvVar = "OPENCODE_DB"
+
+	// ServerWorkspacePVCSuffix is appended to Agent name for the workspace PVC name.
+	ServerWorkspacePVCSuffix = "-server-workspace"
+
+	// DefaultWorkspacePVCSize is the default size for the workspace PVC.
+	DefaultWorkspacePVCSize = "10Gi"
 )
 
 // ServerDeploymentName returns the Deployment name for a Server-mode Agent.
@@ -71,6 +77,23 @@ func ServerSessionPVCName(agentName string) string {
 	return agentName + ServerSessionPVCSuffix
 }
 
+// ServerWorkspacePVCName returns the PVC name for workspace persistence.
+func ServerWorkspacePVCName(agentName string) string {
+	return agentName + ServerWorkspacePVCSuffix
+}
+
+// BuildServerWorkspacePVC creates a PersistentVolumeClaim for workspace persistence.
+// Returns (nil, nil) if workspace persistence is not configured.
+func BuildServerWorkspacePVC(agent *kubeopenv1alpha1.Agent) (*corev1.PersistentVolumeClaim, error) {
+	if agent.Spec.ServerConfig == nil ||
+		agent.Spec.ServerConfig.Persistence == nil ||
+		agent.Spec.ServerConfig.Persistence.Workspace == nil {
+		return nil, nil
+	}
+	return buildServerPVC(agent, agent.Spec.ServerConfig.Persistence.Workspace,
+		ServerWorkspacePVCName(agent.Name), DefaultWorkspacePVCSize, "workspace")
+}
+
 // BuildServerSessionPVC creates a PersistentVolumeClaim for session data persistence.
 // Returns (nil, nil) if session persistence is not configured.
 func BuildServerSessionPVC(agent *kubeopenv1alpha1.Agent) (*corev1.PersistentVolumeClaim, error) {
@@ -79,25 +102,27 @@ func BuildServerSessionPVC(agent *kubeopenv1alpha1.Agent) (*corev1.PersistentVol
 		agent.Spec.ServerConfig.Persistence.Sessions == nil {
 		return nil, nil
 	}
+	return buildServerPVC(agent, agent.Spec.ServerConfig.Persistence.Sessions,
+		ServerSessionPVCName(agent.Name), DefaultSessionPVCSize, "session")
+}
 
-	sessions := agent.Spec.ServerConfig.Persistence.Sessions
-	size := sessions.Size
+// buildServerPVC creates a PVC with the given configuration.
+func buildServerPVC(agent *kubeopenv1alpha1.Agent, vol *kubeopenv1alpha1.VolumePersistence, pvcName, defaultSize, label string) (*corev1.PersistentVolumeClaim, error) {
+	size := vol.Size
 	if size == "" {
-		size = DefaultSessionPVCSize
+		size = defaultSize
 	}
 
 	qty, err := resource.ParseQuantity(size)
 	if err != nil {
-		return nil, fmt.Errorf("invalid session PVC size %q: %w", size, err)
+		return nil, fmt.Errorf("invalid %s PVC size %q: %w", label, size, err)
 	}
-
-	labels := getServerLabels(agent.Name)
 
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ServerSessionPVCName(agent.Name),
+			Name:      pvcName,
 			Namespace: agent.Namespace,
-			Labels:    labels,
+			Labels:    getServerLabels(agent.Name),
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -111,8 +136,8 @@ func BuildServerSessionPVC(agent *kubeopenv1alpha1.Agent) (*corev1.PersistentVol
 		},
 	}
 
-	if sessions.StorageClassName != nil {
-		pvc.Spec.StorageClassName = sessions.StorageClassName
+	if vol.StorageClassName != nil {
+		pvc.Spec.StorageClassName = vol.StorageClassName
 	}
 
 	return pvc, nil
@@ -184,6 +209,17 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 	}
 
 	// Build volumes
+	workspaceVolumeSource := corev1.VolumeSource{
+		EmptyDir: &corev1.EmptyDirVolumeSource{},
+	}
+	if serverConfig.Persistence != nil && serverConfig.Persistence.Workspace != nil {
+		workspaceVolumeSource = corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: ServerWorkspacePVCName(agent.Name),
+			},
+		}
+	}
+
 	volumes := []corev1.Volume{
 		{
 			Name: ToolsVolumeName,
@@ -192,10 +228,8 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 			},
 		},
 		{
-			Name: WorkspaceVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
+			Name:         WorkspaceVolumeName,
+			VolumeSource: workspaceVolumeSource,
 		},
 	}
 

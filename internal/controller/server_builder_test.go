@@ -1179,3 +1179,194 @@ func TestBuildServerDeployment_WithoutSessionPersistence(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildServerWorkspacePVC(t *testing.T) {
+	storageClass := "gp3"
+
+	tests := []struct {
+		name             string
+		serverConfig     *kubeopenv1alpha1.ServerConfig
+		wantNil          bool
+		wantSize         string
+		wantStorageClass *string
+	}{
+		{
+			name:         "no server config",
+			serverConfig: nil,
+			wantNil:      true,
+		},
+		{
+			name:         "no persistence",
+			serverConfig: &kubeopenv1alpha1.ServerConfig{Port: 4096},
+			wantNil:      true,
+		},
+		{
+			name: "persistence with nil workspace",
+			serverConfig: &kubeopenv1alpha1.ServerConfig{
+				Port:        4096,
+				Persistence: &kubeopenv1alpha1.PersistenceConfig{},
+			},
+			wantNil: true,
+		},
+		{
+			name: "workspace with defaults",
+			serverConfig: &kubeopenv1alpha1.ServerConfig{
+				Port: 4096,
+				Persistence: &kubeopenv1alpha1.PersistenceConfig{
+					Workspace: &kubeopenv1alpha1.VolumePersistence{},
+				},
+			},
+			wantNil:  false,
+			wantSize: DefaultWorkspacePVCSize,
+		},
+		{
+			name: "workspace with custom size and storage class",
+			serverConfig: &kubeopenv1alpha1.ServerConfig{
+				Port: 4096,
+				Persistence: &kubeopenv1alpha1.PersistenceConfig{
+					Workspace: &kubeopenv1alpha1.VolumePersistence{
+						Size:             "50Gi",
+						StorageClassName: &storageClass,
+					},
+				},
+			},
+			wantNil:          false,
+			wantSize:         "50Gi",
+			wantStorageClass: &storageClass,
+		},
+	}
+
+	t.Run("invalid size returns error", func(t *testing.T) {
+		agent := &kubeopenv1alpha1.Agent{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
+			Spec: kubeopenv1alpha1.AgentSpec{
+				ServerConfig: &kubeopenv1alpha1.ServerConfig{
+					Port: 4096,
+					Persistence: &kubeopenv1alpha1.PersistenceConfig{
+						Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "invalid"},
+					},
+				},
+			},
+		}
+		pvc, err := BuildServerWorkspacePVC(agent)
+		if err == nil {
+			t.Fatal("expected error for invalid size")
+		}
+		if pvc != nil {
+			t.Fatal("expected nil PVC on error")
+		}
+	})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent := &kubeopenv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
+				Spec:       kubeopenv1alpha1.AgentSpec{ServerConfig: tt.serverConfig},
+			}
+
+			pvc, err := BuildServerWorkspacePVC(agent)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantNil {
+				if pvc != nil {
+					t.Fatalf("expected nil PVC, got %v", pvc)
+				}
+				return
+			}
+			if pvc == nil {
+				t.Fatal("expected non-nil PVC")
+			}
+
+			expectedName := "test-agent" + ServerWorkspacePVCSuffix
+			if pvc.Name != expectedName {
+				t.Errorf("PVC name = %q, want %q", pvc.Name, expectedName)
+			}
+			if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteOnce {
+				t.Errorf("PVC access modes = %v, want [ReadWriteOnce]", pvc.Spec.AccessModes)
+			}
+			storageReq := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+			if storageReq.String() != tt.wantSize {
+				t.Errorf("PVC size = %q, want %q", storageReq.String(), tt.wantSize)
+			}
+			if tt.wantStorageClass != nil {
+				if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != *tt.wantStorageClass {
+					t.Errorf("PVC storageClassName = %v, want %q", pvc.Spec.StorageClassName, *tt.wantStorageClass)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildServerDeployment_WithWorkspacePersistence(t *testing.T) {
+	agent := &kubeopenv1alpha1.Agent{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
+		Spec: kubeopenv1alpha1.AgentSpec{
+			ServerConfig: &kubeopenv1alpha1.ServerConfig{
+				Port: 4096,
+				Persistence: &kubeopenv1alpha1.PersistenceConfig{
+					Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "20Gi"},
+				},
+			},
+		},
+	}
+	cfg := agentConfig{
+		executorImage: "test-executor:v1.0.0",
+		agentImage:    "test-agent:v1.0.0",
+		workspaceDir:  "/workspace",
+	}
+
+	deployment := BuildServerDeployment(agent, cfg, defaultSystemConfig(), nil, nil, nil, nil)
+	if deployment == nil {
+		t.Fatal("BuildServerDeployment returned nil")
+	}
+
+	// Verify workspace volume is a PVC (not EmptyDir)
+	for _, vol := range deployment.Spec.Template.Spec.Volumes {
+		if vol.Name == WorkspaceVolumeName {
+			if vol.PersistentVolumeClaim == nil {
+				t.Error("workspace volume should be a PVC when persistence is configured")
+			} else if vol.PersistentVolumeClaim.ClaimName != ServerWorkspacePVCName("test-agent") {
+				t.Errorf("workspace PVC claim = %q, want %q", vol.PersistentVolumeClaim.ClaimName, ServerWorkspacePVCName("test-agent"))
+			}
+			if vol.EmptyDir != nil {
+				t.Error("workspace volume should not be EmptyDir when persistence is configured")
+			}
+			return
+		}
+	}
+	t.Error("workspace volume not found")
+}
+
+func TestBuildServerDeployment_WithoutWorkspacePersistence(t *testing.T) {
+	agent := &kubeopenv1alpha1.Agent{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
+		Spec: kubeopenv1alpha1.AgentSpec{
+			ServerConfig: &kubeopenv1alpha1.ServerConfig{Port: 4096},
+		},
+	}
+	cfg := agentConfig{
+		executorImage: "test-executor:v1.0.0",
+		agentImage:    "test-agent:v1.0.0",
+		workspaceDir:  "/workspace",
+	}
+
+	deployment := BuildServerDeployment(agent, cfg, defaultSystemConfig(), nil, nil, nil, nil)
+	if deployment == nil {
+		t.Fatal("BuildServerDeployment returned nil")
+	}
+
+	// Verify workspace volume is EmptyDir (not PVC)
+	for _, vol := range deployment.Spec.Template.Spec.Volumes {
+		if vol.Name == WorkspaceVolumeName {
+			if vol.EmptyDir == nil {
+				t.Error("workspace volume should be EmptyDir without persistence")
+			}
+			if vol.PersistentVolumeClaim != nil {
+				t.Error("workspace volume should not be PVC without persistence")
+			}
+			return
+		}
+	}
+	t.Error("workspace volume not found")
+}

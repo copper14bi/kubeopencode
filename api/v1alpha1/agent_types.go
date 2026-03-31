@@ -95,6 +95,13 @@ type PersistenceConfig struct {
 	// history survives server pod restarts.
 	// +optional
 	Sessions *VolumePersistence `json:"sessions,omitempty"`
+
+	// Workspace enables persistent storage for the workspace directory.
+	// When enabled, git-cloned repos, AI-modified files, and in-progress work
+	// survive server pod restarts. Without this, workspace uses EmptyDir and
+	// is re-initialized on every restart (git repos re-cloned by init containers).
+	// +optional
+	Workspace *VolumePersistence `json:"workspace,omitempty"`
 }
 
 // VolumePersistence defines PVC configuration for a persistent volume.
@@ -104,8 +111,8 @@ type VolumePersistence struct {
 	StorageClassName *string `json:"storageClassName,omitempty"`
 
 	// Size of the PVC.
+	// If not specified, defaults to 1Gi for sessions and 10Gi for workspace.
 	// +optional
-	// +kubebuilder:default="1Gi"
 	Size string `json:"size,omitempty"`
 }
 

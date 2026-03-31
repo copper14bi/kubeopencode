@@ -95,9 +95,13 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile session PVC if persistence is configured
-	if err := r.reconcileSessionPVC(ctx, &agent); err != nil {
+	// Reconcile persistence PVCs if configured
+	if err := r.reconcilePVC(ctx, &agent, BuildServerSessionPVC, "session"); err != nil {
 		logger.Error(err, "Failed to reconcile session PVC")
+		return ctrl.Result{}, err
+	}
+	if err := r.reconcilePVC(ctx, &agent, BuildServerWorkspacePVC, "workspace"); err != nil {
+		logger.Error(err, "Failed to reconcile workspace PVC")
 		return ctrl.Result{}, err
 	}
 
@@ -334,17 +338,17 @@ func (r *AgentReconciler) reconcileContextConfigMap(ctx context.Context, agent *
 	return nil
 }
 
-// reconcileSessionPVC ensures the session PVC exists when persistence is configured.
+// reconcilePVC ensures a PVC exists when the build function returns a desired PVC.
 // PVCs are immutable after creation, so we only create — never update.
-func (r *AgentReconciler) reconcileSessionPVC(ctx context.Context, agent *kubeopenv1alpha1.Agent) error {
+func (r *AgentReconciler) reconcilePVC(ctx context.Context, agent *kubeopenv1alpha1.Agent, buildFn func(*kubeopenv1alpha1.Agent) (*corev1.PersistentVolumeClaim, error), label string) error {
 	logger := log.FromContext(ctx)
 
-	desired, err := BuildServerSessionPVC(agent)
+	desired, err := buildFn(agent)
 	if err != nil {
-		return fmt.Errorf("failed to build session PVC: %w", err)
+		return fmt.Errorf("failed to build %s PVC: %w", label, err)
 	}
 	if desired == nil {
-		// Session persistence not configured.
+		// Persistence not configured for this volume type.
 		// Stale PVCs are cleaned up by cleanupServerResources (on mode switch)
 		// and by OwnerReference GC (on Agent deletion).
 		return nil
@@ -352,7 +356,7 @@ func (r *AgentReconciler) reconcileSessionPVC(ctx context.Context, agent *kubeop
 
 	// Set owner reference for garbage collection
 	if err := controllerutil.SetControllerReference(agent, desired, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference on session PVC: %w", err)
+		return fmt.Errorf("failed to set owner reference on %s PVC: %w", label, err)
 	}
 
 	// Check if PVC already exists
@@ -360,13 +364,13 @@ func (r *AgentReconciler) reconcileSessionPVC(ctx context.Context, agent *kubeop
 	err = r.Get(ctx, client.ObjectKey{Namespace: desired.Namespace, Name: desired.Name}, &existing)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Creating session PVC for Server-mode Agent", "pvc", desired.Name)
+			logger.Info("Creating PVC for Server-mode Agent", "pvc", desired.Name, "type", label)
 			if err := r.Create(ctx, desired); err != nil {
-				return fmt.Errorf("failed to create session PVC: %w", err)
+				return fmt.Errorf("failed to create %s PVC: %w", label, err)
 			}
 			return nil
 		}
-		return fmt.Errorf("failed to get session PVC: %w", err)
+		return fmt.Errorf("failed to get %s PVC: %w", label, err)
 	}
 
 	// PVC already exists — no update needed (PVC spec is immutable)
@@ -415,6 +419,16 @@ func (r *AgentReconciler) cleanupServerResources(ctx context.Context, agent *kub
 		logger.Info("Cleaning up stale session PVC", "pvc", sessionPVCName)
 		if err := r.Delete(ctx, &sessionPVC); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete session PVC: %w", err)
+		}
+	}
+
+	// Delete workspace PVC if exists
+	workspacePVCName := ServerWorkspacePVCName(agent.Name)
+	var workspacePVC corev1.PersistentVolumeClaim
+	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: workspacePVCName}, &workspacePVC); err == nil {
+		logger.Info("Cleaning up stale workspace PVC", "pvc", workspacePVCName)
+		if err := r.Delete(ctx, &workspacePVC); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete workspace PVC: %w", err)
 		}
 	}
 
