@@ -68,9 +68,9 @@ Examples:
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if wide {
-				fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENTS\tEXECUTOR IMAGE\tWORKSPACE\tSERVICE ACCOUNT")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENTS\tEXECUTOR IMAGE\tWORKSPACE\tSERVICE ACCOUNT")
 			} else {
-				fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENTS")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENTS")
 			}
 
 			for i, tmpl := range templates.Items {
@@ -80,16 +80,16 @@ Examples:
 						image = "..." + image[len(image)-47:]
 					}
 
-					fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n",
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\t%s\n",
 						tmpl.Namespace, tmpl.Name, refCounts[i],
 						image, tmpl.Spec.WorkspaceDir, tmpl.Spec.ServiceAccountName)
 				} else {
-					fmt.Fprintf(w, "%s\t%s\t%d\n",
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%d\n",
 						tmpl.Namespace, tmpl.Name, refCounts[i])
 				}
 			}
 
-			w.Flush()
+			_ = w.Flush()
 			return nil
 		},
 	}

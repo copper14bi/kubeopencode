@@ -151,7 +151,7 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("failed to stream logs for pod %q: %w", podName, err)
 			}
-			defer stream.Close()
+			defer func() { _ = stream.Close() }()
 
 			_, err = io.Copy(os.Stdout, stream)
 			if err != nil && !errors.Is(err, context.Canceled) {
@@ -216,9 +216,9 @@ Examples:
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if wide {
-				fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENT\tPHASE\tAGE\tPOD")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENT\tPHASE\tAGE\tPOD")
 			} else {
-				fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENT\tPHASE\tAGE")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tAGENT\tPHASE\tAGE")
 			}
 
 			for _, task := range tasks.Items {
@@ -239,15 +239,15 @@ Examples:
 					if pod == "" {
 						pod = "-"
 					}
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 						task.Namespace, task.Name, agent, phase, age, pod)
 				} else {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 						task.Namespace, task.Name, agent, phase, age)
 				}
 			}
 
-			w.Flush()
+			_ = w.Flush()
 			return nil
 		},
 	}

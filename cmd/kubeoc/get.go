@@ -77,9 +77,9 @@ Examples:
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if wide {
-				fmt.Fprintln(w, "NAMESPACE\tNAME\tMODE\tSTATUS\tPROFILE\tTEMPLATE")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tMODE\tSTATUS\tPROFILE\tTEMPLATE")
 			} else {
-				fmt.Fprintln(w, "NAMESPACE\tNAME\tMODE\tSTATUS")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tMODE\tSTATUS")
 			}
 
 			for _, agent := range agents.Items {
@@ -109,15 +109,15 @@ Examples:
 						template = agent.Spec.TemplateRef.Name
 					}
 
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 						agent.Namespace, agent.Name, mode, status, profile, template)
 				} else {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 						agent.Namespace, agent.Name, mode, status)
 				}
 			}
 
-			w.Flush()
+			_ = w.Flush()
 			return nil
 		},
 	}

@@ -278,7 +278,7 @@ func runAgentAttachServiceProxy(ctx context.Context, namespace, agentName string
 		FlushInterval: -1, // Immediate flush for SSE streaming
 	}
 
-	localServer := &http.Server{
+	localServer := &http.Server{ //nolint:gosec // ReadHeaderTimeout intentionally omitted for SSE streaming
 		Addr:         fmt.Sprintf("127.0.0.1:%d", localPort),
 		Handler:      proxy,
 		WriteTimeout: 0, // Disabled for SSE long-lived connections
@@ -309,7 +309,7 @@ func runAgentAttachServiceProxy(ctx context.Context, namespace, agentName string
 	fmt.Printf("Launching opencode attach...\n\n")
 
 	// Launch opencode attach
-	attachCmd := exec.CommandContext(ctx, "opencode", "attach", localURL)
+	attachCmd := exec.CommandContext(ctx, "opencode", "attach", localURL) //nolint:gosec // args are not user-controlled
 	attachCmd.Stdin = os.Stdin
 	attachCmd.Stdout = os.Stdout
 	attachCmd.Stderr = os.Stderr
@@ -393,7 +393,7 @@ func runAgentAttachPortForward(ctx context.Context, namespace, agentName string,
 	pfCtx, pfCancel := context.WithCancel(ctx)
 	defer pfCancel()
 
-	pfCmd := exec.CommandContext(pfCtx, "kubectl", "port-forward",
+	pfCmd := exec.CommandContext(pfCtx, "kubectl", "port-forward", //nolint:gosec // args are not user-controlled
 		"-n", namespace,
 		fmt.Sprintf("deployment/%s", deploymentName),
 		fmt.Sprintf("%d:%d", localPort, serverPort),
@@ -414,7 +414,7 @@ func runAgentAttachPortForward(ctx context.Context, namespace, agentName string,
 	fmt.Printf("Port-forward ready: %s\n", localURL)
 	fmt.Printf("Launching opencode attach...\n\n")
 
-	attachCmd := exec.CommandContext(ctx, "opencode", "attach", localURL)
+	attachCmd := exec.CommandContext(ctx, "opencode", "attach", localURL) //nolint:gosec // args are not user-controlled
 	attachCmd.Stdin = os.Stdin
 	attachCmd.Stdout = os.Stdout
 	attachCmd.Stderr = os.Stderr
@@ -455,7 +455,7 @@ func isPortAvailable(port int) bool {
 	if err != nil {
 		return false
 	}
-	ln.Close()
+	_ = ln.Close()
 	return true
 }
 
@@ -465,7 +465,7 @@ func waitForPort(port int, timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 500*time.Millisecond)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil
 		}
 		time.Sleep(500 * time.Millisecond)
