@@ -1,0 +1,36 @@
+# Copyright Contributors to the KubeOpenCode project
+# AgentTemplate for local testing
+#
+# This template defines shared configuration for all local-dev Agents.
+# Agents reference this template via spec.templateRef, inheriting images,
+# credentials, workspace settings, and service account configuration.
+#
+apiVersion: kubeopencode.io/v1alpha1
+kind: AgentTemplate
+metadata:
+  name: local-dev-base
+spec:
+  # OpenCode init container image
+  agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
+  # Executor container image
+  executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
+  # Attach image for Server mode Tasks
+  attachImage: quay.io/kubeopencode/kubeopencode-agent-attach:latest
+  # Working directory
+  workspaceDir: /workspace
+  # ServiceAccount for RBAC
+  serviceAccountName: kubeopencode-agent
+  # Shared OpenCode configuration
+  config: |
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "opencode/gemini-3.1-pro",
+      "small_model": "opencode/gemini-3-flash",
+      "share": "disabled",
+      "autoupdate": false
+    }
+  # Shared credentials
+  credentials:
+    - name: opencode
+      secretRef:
+        name: opencode-credentials

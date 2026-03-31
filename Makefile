@@ -419,6 +419,87 @@ e2e: e2e-setup e2e-test ## Run full e2e test workflow
 	@echo "E2E tests complete"
 .PHONY: e2e
 
+##@ Local Development
+
+# Kind cluster name for local development
+LOCAL_DEV_CLUSTER ?= kubeopencode
+LOCAL_DEV_AGENTS := opencode devbox attach
+
+# All images needed for local dev (controller + agents)
+LOCAL_DEV_CONTROLLER_IMG := $(IMG_REGISTRY)/$(IMG_ORG)/$(IMG_NAME)
+LOCAL_DEV_AGENT_IMGS := $(foreach a,$(LOCAL_DEV_AGENTS),$(IMG_REGISTRY)/$(IMG_ORG)/kubeopencode-agent-$(a))
+
+local-dev-setup: ## One-command local dev setup: cluster, images, helm, test resources
+	@echo "=== KubeOpenCode Local Dev Setup ==="
+	@# Step 1: Create Kind cluster (idempotent)
+	@if kind get clusters 2>/dev/null | grep -q "^$(LOCAL_DEV_CLUSTER)$$"; then \
+		echo "[1/5] Kind cluster '$(LOCAL_DEV_CLUSTER)' already exists, reusing"; \
+	else \
+		echo "[1/5] Creating Kind cluster '$(LOCAL_DEV_CLUSTER)'..."; \
+		kind create cluster --name $(LOCAL_DEV_CLUSTER); \
+	fi
+	@# Step 2: Build images (controller + agents)
+	@echo "[2/5] Building images..."
+	@$(MAKE) docker-build
+	@for agent in $(LOCAL_DEV_AGENTS); do \
+		echo "  Building agent: $$agent"; \
+		$(MAKE) agent-build AGENT=$$agent; \
+	done
+	@# Step 3: Tag as latest and load into Kind
+	@echo "[3/5] Tagging and loading images into Kind..."
+	@docker tag $(LOCAL_DEV_CONTROLLER_IMG):$(VERSION) $(LOCAL_DEV_CONTROLLER_IMG):latest 2>/dev/null || true
+	@kind load docker-image $(LOCAL_DEV_CONTROLLER_IMG):latest --name $(LOCAL_DEV_CLUSTER)
+	@for img in $(LOCAL_DEV_AGENT_IMGS); do \
+		docker tag $$img:$(VERSION) $$img:latest 2>/dev/null || true; \
+		kind load docker-image $$img:latest --name $(LOCAL_DEV_CLUSTER); \
+	done
+	@# Step 4: Deploy with Helm
+	@echo "[4/5] Deploying KubeOpenCode with Helm..."
+	@helm upgrade --install kubeopencode ./charts/kubeopencode \
+		--namespace kubeopencode-system \
+		--create-namespace \
+		--set controller.image.pullPolicy=Never \
+		--set controller.image.tag=latest \
+		--set agent.image.pullPolicy=Never \
+		--set server.enabled=true \
+		--set server.image.tag=latest \
+		--wait --timeout 120s
+	@# Step 5: Deploy local-dev test resources
+	@echo "[5/5] Deploying test resources..."
+	@kubectl apply -k deploy/local-dev/
+	@echo ""
+	@echo "=== Setup Complete ==="
+	@echo "Controller: kubectl get pods -n kubeopencode-system"
+	@echo "Agents:     kubectl get agent -n test"
+	@echo "Template:   kubectl get agenttemplate -n test"
+	@echo "UI:         kubectl port-forward -n kubeopencode-system svc/kubeopencode-server 2746:2746"
+.PHONY: local-dev-setup
+
+local-dev-reload: ## Rebuild and reload all images into local dev cluster
+	@echo "=== Rebuilding and reloading images ==="
+	@$(MAKE) docker-build
+	@for agent in $(LOCAL_DEV_AGENTS); do \
+		$(MAKE) agent-build AGENT=$$agent; \
+	done
+	@docker tag $(LOCAL_DEV_CONTROLLER_IMG):$(VERSION) $(LOCAL_DEV_CONTROLLER_IMG):latest 2>/dev/null || true
+	@kind load docker-image $(LOCAL_DEV_CONTROLLER_IMG):latest --name $(LOCAL_DEV_CLUSTER)
+	@for img in $(LOCAL_DEV_AGENT_IMGS); do \
+		docker tag $$img:$(VERSION) $$img:latest 2>/dev/null || true; \
+		kind load docker-image $$img:latest --name $(LOCAL_DEV_CLUSTER); \
+	done
+	@kubectl rollout restart deployment -n kubeopencode-system
+	@kubectl rollout status deployment/kubeopencode-controller -n kubeopencode-system --timeout=90s
+	@echo "Reload complete"
+.PHONY: local-dev-reload
+
+local-dev-teardown: ## Delete Kind cluster and all local dev resources
+	@echo "=== Tearing down local dev environment ==="
+	@kubectl delete -k deploy/local-dev/ --ignore-not-found=true 2>/dev/null || true
+	@helm uninstall kubeopencode -n kubeopencode-system 2>/dev/null || true
+	@kind delete cluster --name $(LOCAL_DEV_CLUSTER) 2>/dev/null || true
+	@echo "Teardown complete"
+.PHONY: local-dev-teardown
+
 ##@ Agent
 
 agent-base-build: ## Build universal base image

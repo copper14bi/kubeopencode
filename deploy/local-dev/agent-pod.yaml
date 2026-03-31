@@ -4,29 +4,24 @@
 # This Agent creates a new Pod for each Task (traditional mode).
 # Each Task runs in isolation with its own container.
 #
+# Features demonstrated:
+#   - templateRef: inherits shared config from AgentTemplate
+#   - Pod mode: ephemeral, one Pod per Task
+#
 apiVersion: kubeopencode.io/v1alpha1
 kind: Agent
 metadata:
   name: pod-agent
 spec:
-  # OpenCode init container image
-  agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
-  # Executor container image
+  # Inherit shared configuration from AgentTemplate
+  templateRef:
+    name: local-dev-base
+  profile: "Ephemeral pod-mode agent for isolated task execution"
+  # Required fields (also in template, but required on Agent)
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
-  # Working directory
   workspaceDir: /workspace
-  # ServiceAccount for RBAC
   serviceAccountName: kubeopencode-agent
-  # OpenCode configuration
-  config: |
-    {
-      "$schema": "https://opencode.ai/config.json",
-      "model": "opencode/gemini-3.1-pro",
-      "small_model": "opencode/gemini-3-flash",
-      "share": "disabled",
-      "autoupdate": false
-    }
-  # Mount OpenCode API credentials
+  # Mount OpenCode API credentials (overrides template to demonstrate override)
   credentials:
     - name: opencode
       secretRef:

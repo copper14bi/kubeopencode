@@ -107,7 +107,8 @@ buildx: ## Build and push agent image for multiple architectures
 ##@ Build All
 
 .PHONY: build-all
-build-all: base-build ## Build base and all agent images
+build-all: ## Build base (if exists) and all agent images
+	@if [ -d "base" ]; then $(MAKE) base-build; fi
 	@for agent in $$(ls -d */ 2>/dev/null | sed 's/\///g' | grep -v '^base$$'); do \
 		echo "Building agent: $$agent"; \
 		$(MAKE) AGENT=$$agent NO_CACHE=$(NO_CACHE) build; \

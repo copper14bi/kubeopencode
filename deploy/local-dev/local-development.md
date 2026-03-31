@@ -117,9 +117,10 @@ kubectl get crds | grep kubeopencode
 Expected output:
 
 ```
-agents.kubeopencode.io            <timestamp>
+agents.kubeopencode.io               <timestamp>
+agenttemplates.kubeopencode.io       <timestamp>
 kubeopencodeconfigs.kubeopencode.io   <timestamp>
-tasks.kubeopencode.io             <timestamp>
+tasks.kubeopencode.io                <timestamp>
 ```
 
 Check controller logs:
@@ -184,6 +185,7 @@ Add to `/etc/hosts`:
 | **Task Create** | Create new Tasks with Agent selection (filtered by namespace permissions) |
 | **Agent List** | Browse available Agents with namespace filter |
 | **Agent Detail** | View Agent configuration, contexts, credentials |
+| **AgentTemplate List** | Browse available AgentTemplates |
 | **Filtering** | Filter resources by name and Kubernetes label selectors |
 | **Pagination** | Server-side pagination for efficient browsing of large resource lists |
 
@@ -320,11 +322,16 @@ cp deploy/local-dev/secrets.yaml.example deploy/local-dev/secrets.yaml
 # Edit secrets.yaml with your real API keys
 vim deploy/local-dev/secrets.yaml
 
-# Deploy all resources (namespace, secrets, RBAC, agents)
+# Deploy all resources (namespace, secrets, RBAC, template, agents)
 kubectl apply -k deploy/local-dev/
 
-# Verify the Agent is ready (for Server mode)
+# Verify the AgentTemplate
+kubectl get agenttemplate -n test
+
+# Verify the Agents are ready
 kubectl get agent -n test
+
+# For Server mode, verify the deployment is created
 kubectl get deployment -n test
 ```
 
@@ -337,8 +344,24 @@ kubectl get deployment -n test
 | Secret | `git-settings` | Git author/committer settings |
 | ServiceAccount | `kubeopencode-agent` | Agent service account |
 | Role/RoleBinding | `kubeopencode-agent` | RBAC permissions |
-| Agent | `server-agent` | Server-mode agent (persistent) |
-| Agent | `pod-agent` | Pod-mode agent (per-task) |
+| AgentTemplate | `local-dev-base` | Shared base configuration (images, credentials, workspace) |
+| Agent | `server-agent` | Server-mode agent with session + workspace persistence |
+| Agent | `pod-agent` | Pod-mode agent (ephemeral, per-task) |
+
+### Features Demonstrated
+
+The local-dev resources showcase the following features:
+
+| Feature | Resource | Description |
+|---------|----------|-------------|
+| **AgentTemplate** | `local-dev-base` | Shared config inherited by both Agents via `templateRef` |
+| **Server Mode** | `server-agent` | Persistent OpenCode server (Deployment + Service) |
+| **Session Persistence** | `server-agent` | Conversation history survives pod restarts (1Gi PVC) |
+| **Workspace Persistence** | `server-agent` | Git repos and files survive pod restarts (5Gi PVC) |
+| **Suspend/Resume** | `server-agent` | Can be suspended to save compute (see below) |
+| **Concurrency Control** | `server-agent` | Limited to 3 concurrent tasks |
+| **Pod Mode** | `pod-agent` | Ephemeral one-Pod-per-Task execution |
+| **Agent Profile** | Both agents | Human-readable description for discovery |
 
 ### Test Tasks
 
@@ -400,6 +423,151 @@ done
 kubectl get task -n test -w
 ```
 
+### Testing Persistence
+
+Session and workspace persistence let the server-agent retain state across pod restarts.
+
+#### Verify PVCs Are Created
+
+```bash
+# After deploying the server-agent, check for PVCs
+kubectl get pvc -n test
+
+# Expected output:
+# NAME                             STATUS   VOLUME   CAPACITY   AGE
+# server-agent-server-sessions     Bound    ...      1Gi        ...
+# server-agent-server-workspace    Bound    ...      5Gi        ...
+```
+
+#### Test Session Persistence
+
+```bash
+# Run a task to create a conversation
+kubectl apply -n test -f - <<EOF
+apiVersion: kubeopencode.io/v1alpha1
+kind: Task
+metadata:
+  name: persist-test-1
+spec:
+  agentRef:
+    name: server-agent
+  description: "Remember that the secret code is 42"
+EOF
+
+# Wait for completion, then restart the server pod
+kubectl rollout restart deployment/server-agent-server -n test
+kubectl rollout status deployment/server-agent-server -n test
+
+# The session history should survive the restart
+```
+
+#### Test Workspace Persistence
+
+```bash
+# Run a task that creates files in the workspace
+kubectl apply -n test -f - <<EOF
+apiVersion: kubeopencode.io/v1alpha1
+kind: Task
+metadata:
+  name: persist-test-2
+spec:
+  agentRef:
+    name: server-agent
+  description: "Create a file called hello.txt with the content 'Hello from KubeOpenCode'"
+EOF
+
+# Restart the server pod
+kubectl rollout restart deployment/server-agent-server -n test
+
+# The workspace files should still be there after restart
+```
+
+### Testing Suspend/Resume
+
+Server-mode agents can be suspended to save compute resources while retaining all data.
+
+#### Suspend the Agent
+
+```bash
+# Edit the agent to set suspend: true
+kubectl patch agent server-agent -n test --type=merge -p '
+spec:
+  serverConfig:
+    suspend: true
+'
+
+# Verify the deployment is scaled to 0
+kubectl get deployment -n test
+# Expected: server-agent-server   0/0
+
+# Check agent status
+kubectl get agent server-agent -n test -o jsonpath='{.status.serverStatus.suspended}'
+# Expected: true
+
+# PVCs are retained (no data loss)
+kubectl get pvc -n test
+```
+
+#### Tasks Queue While Suspended
+
+```bash
+# Create a task while agent is suspended
+kubectl apply -n test -f - <<EOF
+apiVersion: kubeopencode.io/v1alpha1
+kind: Task
+metadata:
+  name: queued-test
+spec:
+  agentRef:
+    name: server-agent
+  description: "This will queue until the agent is resumed"
+EOF
+
+# Check task status - should be Queued with reason AgentSuspended
+kubectl get task queued-test -n test -o jsonpath='{.status.phase}'
+# Expected: Queued
+```
+
+#### Resume the Agent
+
+```bash
+# Resume the agent
+kubectl patch agent server-agent -n test --type=merge -p '
+spec:
+  serverConfig:
+    suspend: false
+'
+
+# Verify the deployment scales back up
+kubectl get deployment -n test
+# Expected: server-agent-server   1/1
+
+# Queued tasks should automatically start running
+kubectl get task -n test -w
+```
+
+### Testing AgentTemplate
+
+The `local-dev-base` AgentTemplate provides shared configuration for both agents.
+
+#### View Template Configuration
+
+```bash
+# View the template
+kubectl get agenttemplate local-dev-base -n test -o yaml
+
+# Check which agents reference this template
+kubectl get agent -n test -l kubeopencode.io/agent-template=local-dev-base
+```
+
+#### Verify Template Inheritance
+
+```bash
+# Both agents should have the label set by the controller
+kubectl get agent -n test --show-labels
+# Expected labels include: kubeopencode.io/agent-template=local-dev-base
+```
+
 ### Customization
 
 #### Using Real Secrets
@@ -414,7 +582,7 @@ kubectl apply -f deploy/local-dev/secrets.local.yaml -n test
 
 #### Different AI Model
 
-Edit `agent-server.yaml` or `agent-pod.yaml` to change the model:
+Edit the `agenttemplate.yaml` to change the model for all agents at once:
 
 ```yaml
 config: |
@@ -425,6 +593,38 @@ config: |
   }
 ```
 
+Or override in a specific agent's config (agent-level config overrides template config).
+
+#### Adjusting Persistence Sizes
+
+Edit `agent-server.yaml` to change PVC sizes:
+
+```yaml
+serverConfig:
+  port: 4096
+  persistence:
+    sessions:
+      size: "2Gi"              # Increase session storage
+      storageClassName: "gp3"  # Use a specific StorageClass
+    workspace:
+      size: "20Gi"             # Increase workspace storage
+```
+
+> **Note:** On Kind clusters, the default StorageClass (`standard`) is used. PVC resizing may not be supported depending on the provisioner.
+
+### Stopping a Running Task
+
+```bash
+# Stop a task gracefully (Pod is deleted, Task marked as Stopped)
+kubectl annotate task server-test kubeopencode.io/stop=true -n test
+
+# Check status
+kubectl get task server-test -n test -o jsonpath='{.status.phase}'
+# Expected: Completed (with Stopped condition)
+```
+
+> **Note:** Logs are lost when a Task is stopped. Use `kubectl logs` before stopping to capture output.
+
 ## Cleanup
 
 ### Delete Test Resources
@@ -433,7 +633,7 @@ config: |
 # Delete all tasks
 kubectl delete task --all -n test
 
-# Delete all test resources
+# Delete all test resources (PVCs are cleaned up via OwnerReference)
 kubectl delete -k deploy/local-dev/
 ```
 
@@ -507,3 +707,17 @@ If missing, reinstall with Helm or apply manually:
 ```bash
 kubectl apply -f deploy/crds/
 ```
+
+### PVC Issues (Persistence)
+
+If PVCs are stuck in `Pending`:
+
+```bash
+# Check PVC status
+kubectl describe pvc -n test
+
+# On Kind, ensure default StorageClass exists
+kubectl get storageclass
+```
+
+Kind clusters include a `standard` StorageClass by default. If missing, recreate the cluster.

@@ -4,32 +4,38 @@
 # This Agent runs a persistent OpenCode server (Deployment + Service).
 # Tasks connect to the server via --attach flag for faster execution.
 #
+# Features demonstrated:
+#   - templateRef: inherits shared config from AgentTemplate
+#   - serverConfig: persistent OpenCode server
+#   - persistence: session + workspace data survive pod restarts
+#   - suspend: can be suspended/resumed to save compute resources
+#
 apiVersion: kubeopencode.io/v1alpha1
 kind: Agent
 metadata:
   name: server-agent
 spec:
-  # OpenCode init container image
-  agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
-  # Executor container image (used by the server)
+  # Inherit shared configuration from AgentTemplate
+  templateRef:
+    name: local-dev-base
+  profile: "Persistent server-mode agent for local development and testing"
+  # Required fields (also in template, but required on Agent)
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
-  # Working directory
   workspaceDir: /workspace
-  # ServiceAccount for RBAC
   serviceAccountName: kubeopencode-agent
-  # Enable Server mode
+  # Enable Server mode with persistence
   serverConfig:
     port: 4096
-  # OpenCode configuration
-  config: |
-    {
-      "$schema": "https://opencode.ai/config.json",
-      "model": "opencode/gemini-3.1-pro",
-      "small_model": "opencode/gemini-3-flash",
-      "share": "disabled",
-      "autoupdate": false
-    }
-  # Mount OpenCode API credentials
+    # Session persistence: conversation history survives pod restarts
+    persistence:
+      sessions:
+        size: "1Gi"
+      # Workspace persistence: git repos and modified files survive pod restarts
+      workspace:
+        size: "5Gi"
+  # Limit concurrent tasks for local testing
+  maxConcurrentTasks: 3
+  # Mount OpenCode API credentials (overrides template to demonstrate override)
   credentials:
     - name: opencode
       secretRef:

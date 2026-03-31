@@ -24,5 +24,6 @@ resources:
   - namespace.yaml
   - secrets.yaml
   - rbac.yaml
+  - agenttemplate.yaml
   - agent-server.yaml
   - agent-pod.yaml
