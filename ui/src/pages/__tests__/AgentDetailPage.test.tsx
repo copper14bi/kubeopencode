@@ -26,19 +26,20 @@ describe('AgentDetailPage', () => {
     });
   });
 
-  it('shows Pod mode badge', async () => {
+  it('shows mode in configuration for Pod agent', async () => {
     renderAgentDetailPage('default', 'opencode-agent');
 
     await waitFor(() => {
-      expect(screen.getByText('Pod Mode')).toBeInTheDocument();
+      expect(screen.getByText('Mode')).toBeInTheDocument();
+      expect(screen.getByText('Pod')).toBeInTheDocument();
     });
   });
 
-  it('shows Server mode badge for server agents', async () => {
-    renderAgentDetailPage('production', 'restricted-agent');
+  it('shows live status badge for server agents', async () => {
+    renderAgentDetailPage('test', 'server-agent');
 
     await waitFor(() => {
-      expect(screen.getByText('Server Mode')).toBeInTheDocument();
+      expect(screen.getByText('Live')).toBeInTheDocument();
     });
   });
 
@@ -111,17 +112,17 @@ describe('AgentDetailPage', () => {
   });
 
   it('shows server status for server mode agents', async () => {
-    renderAgentDetailPage('production', 'restricted-agent');
+    renderAgentDetailPage('test', 'server-agent');
 
     await waitFor(() => {
       expect(screen.getByText('Server Status')).toBeInTheDocument();
-      expect(screen.getByText('restricted-agent-server')).toBeInTheDocument();
-      expect(screen.getByText('http://restricted-agent.production.svc.cluster.local:4096')).toBeInTheDocument();
+      expect(screen.getByText('server-agent-server')).toBeInTheDocument();
+      expect(screen.getByText('http://server-agent.test.svc.cluster.local:4096')).toBeInTheDocument();
     });
   });
 
   it('shows conditions for agents with conditions', async () => {
-    renderAgentDetailPage('production', 'restricted-agent');
+    renderAgentDetailPage('test', 'server-agent');
 
     await waitFor(() => {
       expect(screen.getByText('Conditions')).toBeInTheDocument();

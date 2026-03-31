@@ -174,20 +174,22 @@ function AgentDetailPage() {
               )}
             </div>
             <div className="flex items-center gap-3">
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
-                agent.mode === 'Server'
-                  ? agent.serverStatus?.ready
-                    ? 'bg-violet-50 text-violet-600 border-violet-200'
-                    : 'bg-amber-50 text-amber-600 border-amber-200'
-                  : 'bg-stone-50 text-stone-500 border-stone-200'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${
-                  agent.mode === 'Server'
-                    ? agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                    : 'bg-stone-400'
-                }`} />
-                {agent.mode} Mode{agent.mode === 'Server' && !agent.serverStatus?.ready ? ' (Not Ready)' : ''}
-              </span>
+              {agent.mode === 'Server' && (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
+                  agent.serverStatus?.suspended
+                    ? 'bg-amber-50 text-amber-600 border-amber-200'
+                    : agent.serverStatus?.ready
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                      : 'bg-violet-50 text-violet-600 border-violet-200'
+                }`}>
+                  {!agent.serverStatus?.suspended && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                    }`} />
+                  )}
+                  {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
+                </span>
+              )}
               {agent.mode === 'Server' && agent.serverStatus && (
                 <SuspendResumeButton
                   namespace={agent.namespace}
@@ -236,6 +238,10 @@ function AgentDetailPage() {
           <div>
             <h3 className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-4">Configuration</h3>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div>
+                <dt className="text-xs text-stone-400">Mode</dt>
+                <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.mode}</dd>
+              </div>
               {agent.executorImage && (
                 <div>
                   <dt className="text-xs text-stone-400">Executor Image</dt>
