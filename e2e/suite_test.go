@@ -5,6 +5,8 @@ package e2e
 
 import (
 	"context"
+	"fmt"
+	"math/rand/v2"
 	"os"
 	"strings"
 	"testing"
@@ -233,7 +235,7 @@ func isAlreadyExistsGeneric(err error) bool {
 
 // Helper function to generate unique names for test resources
 func uniqueName(prefix string) string {
-	return prefix + "-" + time.Now().Format("150405")
+	return fmt.Sprintf("%s-%s-%04d", prefix, time.Now().Format("150405"), rand.IntN(10000))
 }
 
 // getTaskCondition retrieves a specific condition from Task status
