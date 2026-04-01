@@ -113,7 +113,7 @@ The `deploy/local-dev/` directory sets up:
 | Resource | Name | Description |
 |----------|------|-------------|
 | AgentTemplate | `local-dev-base` | Shared base configuration (images, model, workspace) |
-| Agent | `persistent-agent` | Persistent agent with session + workspace storage, idle timeout, concurrency control |
+| Agent | `persistent-agent` | Persistent agent with session + workspace storage, standby, concurrency control |
 | Agent | `dev-agent` | Lightweight agent with ephemeral storage |
 
 These demonstrate key features: template inheritance, persistence, suspend/resume, and concurrency control. See [Features](features.md) for details.
