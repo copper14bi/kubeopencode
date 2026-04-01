@@ -15,7 +15,8 @@ ADRs document significant architectural and design decisions along with their co
 | 0008 | [Rebrand KubeTask to KubeOpenCode](0008-rebrand-kubetask-to-kubeopencode.md) | |
 | 0009 | [Task Execution Migration from Job to Pod](0009-job-to-pod-migration.md) | 2026-01-05 |
 | 0010 | [OpenCode Permission Configuration for Automated Execution](0010-opencode-permission-for-automated-execution.md) | |
-| 0011 | [Agent Server Mode for Persistent OpenCode Servers](0011-agent-server-mode.md) | |
+| 0022 | [Agent Always Running — Unified Execution Model](0022-agent-always-running.md) | 2026-03-31 |
+| 0023 | [Agent Idle Timeout for Auto-Suspend/Auto-Resume](0023-agent-idle-timeout.md) | 2026-04-01 |
 | 0014 | [Remove TaskTemplate CRD](0014-remove-tasktemplate.md) | 2026-03-10 |
 | 0018 | [Web Terminal Replaces OpenCode Web UI](0018-web-terminal-replaces-web-ui.md) | 2026-03-27 |
 | 0019 | [Web Terminal Credential Security Strategy](0019-web-terminal-credential-security.md) | 2026-03-27 |
@@ -46,4 +47,5 @@ ADRs document significant architectural and design decisions along with their co
 | # | Title | Superseded By |
 |---|-------|---------------|
 | 0002 | [Task CRD vs Kubernetes Job](0002-task-crd-vs-kubernetes-job.md) | [ADR 0009](0009-job-to-pod-migration.md) |
+| 0011 | [Agent Server Mode for Persistent OpenCode Servers](0011-agent-server-mode.md) | [ADR 0022](0022-agent-always-running.md) |
 | 0017 | [OpenCode Web UI Integration via Self-Hosted Reverse Proxy](0017-opencode-web-ui-integration.md) | [ADR 0018](0018-web-terminal-replaces-web-ui.md) |

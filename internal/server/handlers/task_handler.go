@@ -174,10 +174,25 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		task.GenerateName = "task-"
 	}
 
-	// Set agent reference if provided
+	// Validate mutually exclusive agentRef/templateRef
+	if req.AgentRef != nil && req.TemplateRef != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request", "only one of agentRef or templateRef can be specified")
+		return
+	}
+	if req.AgentRef == nil && req.TemplateRef == nil {
+		writeError(w, http.StatusBadRequest, "Invalid request", "either agentRef or templateRef must be specified")
+		return
+	}
+
+	// Set agent reference or template reference
 	if req.AgentRef != nil {
 		task.Spec.AgentRef = &kubeopenv1alpha1.AgentReference{
 			Name: req.AgentRef.Name,
+		}
+	}
+	if req.TemplateRef != nil {
+		task.Spec.TemplateRef = &kubeopenv1alpha1.AgentTemplateReference{
+			Name: req.TemplateRef.Name,
 		}
 	}
 
@@ -406,6 +421,18 @@ func taskToResponse(task *kubeopenv1alpha1.Task) types.TaskResponse {
 	if task.Status.AgentRef != nil {
 		resp.AgentRef = &types.AgentReference{
 			Name: task.Status.AgentRef.Name,
+		}
+	}
+
+	// Template ref
+	if task.Spec.TemplateRef != nil {
+		resp.TemplateRef = &types.AgentTemplateReference{
+			Name: task.Spec.TemplateRef.Name,
+		}
+	}
+	if task.Status.TemplateRef != nil {
+		resp.TemplateRef = &types.AgentTemplateReference{
+			Name: task.Status.TemplateRef.Name,
 		}
 	}
 

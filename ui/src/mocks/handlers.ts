@@ -246,15 +246,23 @@ export const handlers = [
   http.post(`${API_BASE}/namespaces/:namespace/agents`, async ({ params, request }) => {
     const { namespace } = params;
     const body = await request.json() as Record<string, unknown>;
+    const agentName = body.name as string;
     const newAgent: Agent = {
-      name: body.name as string,
+      name: agentName,
       namespace: namespace as string,
       profile: body.profile as string,
       workspaceDir: (body.workspaceDir as string) || '/workspace',
       contextsCount: 0,
       credentialsCount: 0,
       createdAt: new Date().toISOString(),
-      mode: 'Pod',
+      serverStatus: {
+        deploymentName: `${agentName}-server`,
+        serviceName: agentName,
+        url: `http://${agentName}.${namespace}.svc.cluster.local:4096`,
+        ready: false,
+        port: 4096,
+        suspended: false,
+      },
     };
     return HttpResponse.json(newAgent, { status: 201 });
   }),

@@ -6,6 +6,8 @@ import { useToast } from '../contexts/ToastContext';
 import { useNamespace } from '../contexts/NamespaceContext';
 import Breadcrumbs from '../components/Breadcrumbs';
 
+type SourceType = 'agent' | 'template';
+
 function TaskCreatePage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -24,7 +26,9 @@ function TaskCreatePage() {
   });
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [sourceType, setSourceType] = useState<SourceType>('agent');
   const [selectedAgent, setSelectedAgent] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   const { data: namespacesData } = useQuery({
     queryKey: ['namespaces'],
@@ -34,6 +38,11 @@ function TaskCreatePage() {
   const { data: agentsData } = useQuery({
     queryKey: ['agents'],
     queryFn: () => api.listAllAgents(),
+  });
+
+  const { data: templatesData } = useQuery({
+    queryKey: ['agenttemplates'],
+    queryFn: () => api.listAllAgentTemplates(),
   });
 
   const rerunTaskName = searchParams.get('rerun');
@@ -47,10 +56,20 @@ function TaskCreatePage() {
   useEffect(() => {
     const agentParam = searchParams.get('agent');
     if (agentParam) {
+      setSourceType('agent');
       setSelectedAgent(agentParam);
       const agentNs = agentParam.split('/')[0];
       if (agentNs) {
         setNamespace(agentNs);
+      }
+    }
+    const templateParam = searchParams.get('template');
+    if (templateParam) {
+      setSourceType('template');
+      setSelectedTemplate(templateParam);
+      const templateNs = templateParam.split('/')[0];
+      if (templateNs) {
+        setNamespace(templateNs);
       }
     }
   }, [searchParams]);
@@ -61,8 +80,15 @@ function TaskCreatePage() {
         setDescription(rerunTask.description);
       }
       if (rerunTask.agentRef) {
+        setSourceType('agent');
         const agentKey = `${rerunTask.namespace}/${rerunTask.agentRef.name}`;
         setSelectedAgent(agentKey);
+        setNamespace(rerunTask.namespace);
+      }
+      if (rerunTask.templateRef) {
+        setSourceType('template');
+        const templateKey = `${rerunTask.namespace}/${rerunTask.templateRef.name}`;
+        setSelectedTemplate(templateKey);
         setNamespace(rerunTask.namespace);
       }
     }
@@ -72,6 +98,11 @@ function TaskCreatePage() {
     if (!agentsData?.agents) return [];
     return agentsData.agents.filter((agent) => agent.namespace === namespace);
   }, [agentsData?.agents, namespace]);
+
+  const availableTemplates = useMemo(() => {
+    if (!templatesData?.templates) return [];
+    return templatesData.templates.filter((t) => t.namespace === namespace);
+  }, [templatesData?.templates, namespace]);
 
   const handleNamespaceChange = (newNamespace: string) => {
     setNamespace(newNamespace);
@@ -83,6 +114,23 @@ function TaskCreatePage() {
       if (agent && agent.namespace !== newNamespace) {
         setSelectedAgent('');
       }
+    }
+    if (selectedTemplate) {
+      const tmpl = templatesData?.templates.find(
+        (t) => `${t.namespace}/${t.name}` === selectedTemplate
+      );
+      if (tmpl && tmpl.namespace !== newNamespace) {
+        setSelectedTemplate('');
+      }
+    }
+  };
+
+  const handleSourceTypeChange = (newType: SourceType) => {
+    setSourceType(newType);
+    if (newType === 'agent') {
+      setSelectedTemplate('');
+    } else {
+      setSelectedAgent('');
     }
   };
 
@@ -110,21 +158,31 @@ function TaskCreatePage() {
       task.description = description;
     }
 
-    if (selectedAgent) {
+    if (sourceType === 'agent' && selectedAgent) {
       const agent = agentsData?.agents.find(
         (a) => `${a.namespace}/${a.name}` === selectedAgent
       );
       if (agent) {
-        task.agentRef = {
-          name: agent.name,
-        };
+        task.agentRef = { name: agent.name };
+      }
+    }
+
+    if (sourceType === 'template' && selectedTemplate) {
+      const tmpl = templatesData?.templates.find(
+        (t) => `${t.namespace}/${t.name}` === selectedTemplate
+      );
+      if (tmpl) {
+        task.templateRef = { name: tmpl.name };
       }
     }
 
     createMutation.mutate(task);
   };
 
-  const isValid = description && selectedAgent;
+  const isValid = description && (
+    (sourceType === 'agent' && selectedAgent) ||
+    (sourceType === 'template' && selectedTemplate)
+  );
 
   return (
     <div className="animate-fade-in">
@@ -182,49 +240,127 @@ function TaskCreatePage() {
 
           <div>
             <label
-              htmlFor="agent"
               className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
             >
-              Agent
+              Source
             </label>
-            <select
-              id="agent"
-              value={selectedAgent}
-              onChange={(e) => setSelectedAgent(e.target.value)}
-              required
-              className="block w-full rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
-            >
-              <option value="">
-                {availableAgents.length === 0
-                  ? 'No agents available'
-                  : 'Select an agent...'}
-              </option>
-              {availableAgents.map((agent) => (
-                <option
-                  key={`${agent.namespace}/${agent.name}`}
-                  value={`${agent.namespace}/${agent.name}`}
+            <div className="flex rounded-lg border border-stone-200 overflow-hidden mb-3">
+              <button
+                type="button"
+                onClick={() => handleSourceTypeChange('agent')}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                  sourceType === 'agent'
+                    ? 'bg-primary-50 text-primary-700 border-r border-stone-200'
+                    : 'bg-white text-stone-500 hover:bg-stone-50 border-r border-stone-200'
+                }`}
+              >
+                Agent
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSourceTypeChange('template')}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                  sourceType === 'template'
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'bg-white text-stone-500 hover:bg-stone-50'
+                }`}
+              >
+                Agent Template
+              </button>
+            </div>
+
+            {sourceType === 'agent' ? (
+              <>
+                <label
+                  htmlFor="agent"
+                  className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
                 >
-                  {agent.namespace}/{agent.name}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1.5 text-xs text-stone-400">
-              {availableAgents.length === 0
-                ? 'No agents available for this namespace.'
-                : `${availableAgents.length} agent${availableAgents.length !== 1 ? 's' : ''} available`}
-            </p>
-            {selectedAgent && agentsData?.agents.find(
-              (a) => `${a.namespace}/${a.name}` === selectedAgent
-            )?.mode === 'Server' && (
-              <div className="mt-2 flex items-start gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
-                <svg className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-                </svg>
-                <p className="text-xs text-violet-700">
-                  <span className="font-medium">Server mode agent.</span> Task contexts are not supported — the task will use the agent's pre-loaded workspace. For interactive sessions, use <code className="bg-violet-100 px-1 py-0.5 rounded font-mono">opencode attach</code> instead.
+                  Agent
+                </label>
+                <select
+                  id="agent"
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  required
+                  className="block w-full rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
+                >
+                  <option value="">
+                    {availableAgents.length === 0
+                      ? 'No agents available'
+                      : 'Select an agent...'}
+                  </option>
+                  {availableAgents.map((agent) => (
+                    <option
+                      key={`${agent.namespace}/${agent.name}`}
+                      value={`${agent.namespace}/${agent.name}`}
+                    >
+                      {agent.namespace}/{agent.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-stone-400">
+                  {availableAgents.length === 0
+                    ? 'No agents available for this namespace.'
+                    : `${availableAgents.length} agent${availableAgents.length !== 1 ? 's' : ''} available`}
                 </p>
-              </div>
+                {selectedAgent && (
+                  <div className="mt-2 flex items-start gap-2 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+                    <svg className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                    </svg>
+                    <p className="text-xs text-violet-700">
+                      Task will be sent to the running Agent via <code className="bg-violet-100 px-1 py-0.5 rounded font-mono">--attach</code>. For interactive sessions, use <code className="bg-violet-100 px-1 py-0.5 rounded font-mono">opencode attach</code> instead.
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <label
+                  htmlFor="template"
+                  className="block text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-1.5"
+                >
+                  Agent Template
+                </label>
+                <select
+                  id="template"
+                  value={selectedTemplate}
+                  onChange={(e) => setSelectedTemplate(e.target.value)}
+                  required
+                  className="block w-full rounded-lg border-stone-200 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 text-sm text-stone-700"
+                >
+                  <option value="">
+                    {availableTemplates.length === 0
+                      ? 'No templates available'
+                      : 'Select a template...'}
+                  </option>
+                  {availableTemplates.map((tmpl) => (
+                    <option
+                      key={`${tmpl.namespace}/${tmpl.name}`}
+                      value={`${tmpl.namespace}/${tmpl.name}`}
+                    >
+                      {tmpl.namespace}/{tmpl.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-stone-400">
+                  {availableTemplates.length === 0
+                    ? 'No templates available for this namespace.'
+                    : `${availableTemplates.length} template${availableTemplates.length !== 1 ? 's' : ''} available`}
+                </p>
+                {selectedTemplate && (
+                  <div className="mt-2 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <svg className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                    </svg>
+                    <p className="text-xs text-amber-700">
+                      An ephemeral Pod will be created from this template. The Pod will be cleaned up after the task completes.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

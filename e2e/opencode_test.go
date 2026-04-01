@@ -37,7 +37,7 @@ func opencodeConfig() string {
 
 var _ = Describe("OpenCode E2E Tests", Label(LabelOpenCode), func() {
 
-	Context("Server Mode - Real OpenCode Agent", func() {
+	Context("Real OpenCode Agent", func() {
 		var (
 			agentName     string
 			agentKey      types.NamespacedName
@@ -52,7 +52,7 @@ var _ = Describe("OpenCode E2E Tests", Label(LabelOpenCode), func() {
 				Namespace: testNS,
 			}
 
-			By("Creating server-mode Agent with OpenCode free model")
+			By("Creating Agent with OpenCode free model")
 			config := opencodeConfig()
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
@@ -65,30 +65,28 @@ var _ = Describe("OpenCode E2E Tests", Label(LabelOpenCode), func() {
 					AttachImage:        opencodeImage, // Use same image for attach pods in e2e (no separate attach image)
 					ServiceAccountName: testServiceAccount,
 					WorkspaceDir:       "/workspace",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
-					Config: &config,
+					Port:               4096,
+					Config:             &config,
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
 
-			By("Waiting for server Deployment to be ready")
+			By("Waiting for Deployment to be ready")
 			Eventually(func() bool {
 				deployment := &appsv1.Deployment{}
 				if err := k8sClient.Get(ctx, deploymentKey, deployment); err != nil {
 					return false
 				}
 				return deployment.Status.ReadyReplicas > 0
-			}, serverTimeout, interval).Should(BeTrue(), "Server Deployment should have ready replicas")
+			}, serverTimeout, interval).Should(BeTrue(), "Deployment should have ready replicas")
 
-			By("Waiting for Agent serverStatus to be populated")
+			By("Waiting for Agent status to be populated")
 			Eventually(func() bool {
 				a := &kubeopenv1alpha1.Agent{}
 				if err := k8sClient.Get(ctx, agentKey, a); err != nil {
 					return false
 				}
-				return a.Status.ServerStatus != nil && a.Status.ServerStatus.URL != ""
+				return a.Status.URL != ""
 			}, serverTimeout, interval).Should(BeTrue())
 		})
 
@@ -100,14 +98,14 @@ var _ = Describe("OpenCode E2E Tests", Label(LabelOpenCode), func() {
 			}
 		})
 
-		It("should have OPENCODE_PERMISSION set to allow-all on server pod", func() {
-			By("Verifying server Deployment env vars")
+		It("should have OPENCODE_PERMISSION set to allow-all on Agent Deployment pod", func() {
+			By("Verifying Deployment env vars")
 			deployment := &appsv1.Deployment{}
 			Expect(k8sClient.Get(ctx, deploymentKey, deployment)).Should(Succeed())
 
-			serverContainer := deployment.Spec.Template.Spec.Containers[0]
+			agentContainer := deployment.Spec.Template.Spec.Containers[0]
 			envMap := make(map[string]string)
-			for _, env := range serverContainer.Env {
+			for _, env := range agentContainer.Env {
 				envMap[env.Name] = env.Value
 			}
 
@@ -179,7 +177,7 @@ var _ = Describe("OpenCode E2E Tests", Label(LabelOpenCode), func() {
 			})).Should(Succeed())
 		})
 
-		It("should handle multiple sequential tasks on the same server", func() {
+		It("should handle multiple sequential tasks on the same Agent", func() {
 			tasks := []struct {
 				name        string
 				description string
@@ -219,7 +217,7 @@ var _ = Describe("OpenCode E2E Tests", Label(LabelOpenCode), func() {
 				Expect(k8sClient.Delete(ctx, task)).Should(Succeed())
 			}
 
-			By("Verifying server is still running after multiple tasks")
+			By("Verifying Agent Deployment is still running after multiple tasks")
 			deployment := &appsv1.Deployment{}
 			Expect(k8sClient.Get(ctx, deploymentKey, deployment)).Should(Succeed())
 			Expect(deployment.Status.ReadyReplicas).Should(BeNumerically(">=", 1))

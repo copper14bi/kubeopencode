@@ -110,11 +110,7 @@ func setSuspendState(ctx context.Context, namespace, agentName string, suspend b
 		return fmt.Errorf("agent %q not found in namespace %q: %w", agentName, namespace, err)
 	}
 
-	if !controller.IsServerMode(&agent) {
-		return fmt.Errorf("agent %q is not in Server mode (no serverConfig)\n  Only server-mode agents support suspend/resume", agentName)
-	}
-
-	if agent.Spec.ServerConfig.Suspend == suspend {
+	if agent.Spec.Suspend == suspend {
 		if suspend {
 			fmt.Printf("Agent %s/%s is already suspended\n", namespace, agentName)
 		} else {
@@ -123,7 +119,7 @@ func setSuspendState(ctx context.Context, namespace, agentName string, suspend b
 		return nil
 	}
 
-	agent.Spec.ServerConfig.Suspend = suspend
+	agent.Spec.Suspend = suspend
 	if err := k8sClient.Update(ctx, &agent); err != nil {
 		action := "suspend"
 		if !suspend {
@@ -219,18 +215,14 @@ func runAgentAttachServiceProxy(ctx context.Context, namespace, agentName string
 		return fmt.Errorf("agent %q not found in namespace %q: %w", agentName, namespace, err)
 	}
 
-	if !controller.IsServerMode(&agent) {
-		return fmt.Errorf("agent %q is not in Server mode (no serverConfig)\n  Only server-mode agents support interactive attach", agentName)
-	}
-
 	agentPort := controller.GetServerPort(&agent)
 	if localPort == 0 {
 		localPort = int(agentPort)
 	}
 
-	if agent.Status.ServerStatus == nil || !agent.Status.ServerStatus.Ready {
+	if !agent.Status.Ready {
 		deploymentName := controller.ServerDeploymentName(agentName)
-		return fmt.Errorf("agent %q server is not ready\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
+		return fmt.Errorf("agent %q is not ready\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
 	}
 
 	fmt.Println("Agent ready")
@@ -367,10 +359,6 @@ func runAgentAttachPortForward(ctx context.Context, namespace, agentName string,
 		return fmt.Errorf("agent %q not found in namespace %q: %w", agentName, namespace, err)
 	}
 
-	if !controller.IsServerMode(&agent) {
-		return fmt.Errorf("agent %q is not in Server mode (no serverConfig)\n  Only server-mode agents support interactive attach", agentName)
-	}
-
 	serverPort := controller.GetServerPort(&agent)
 	deploymentName := controller.ServerDeploymentName(agentName)
 
@@ -378,8 +366,8 @@ func runAgentAttachPortForward(ctx context.Context, namespace, agentName string,
 		localPort = int(serverPort)
 	}
 
-	if agent.Status.ServerStatus == nil || !agent.Status.ServerStatus.Ready {
-		return fmt.Errorf("agent %q server is not ready\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
+	if !agent.Status.Ready {
+		return fmt.Errorf("agent %q is not ready\n  Check: kubectl get deployment %s -n %s", agentName, deploymentName, namespace)
 	}
 
 	fmt.Printf("Agent found: %s (port %d)\n", deploymentName, serverPort)

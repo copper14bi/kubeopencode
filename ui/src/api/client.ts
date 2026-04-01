@@ -19,6 +19,7 @@ export interface Task {
   phase: string;
   description?: string;
   agentRef?: AgentReference;
+  templateRef?: AgentReference;
   podName?: string;
   startTime?: string;
   completionTime?: string;
@@ -57,6 +58,7 @@ export interface CreateTaskRequest {
   name?: string;
   description?: string;
   agentRef?: AgentReference;
+  templateRef?: { name: string };
 }
 
 export interface CreateAgentRequest {
@@ -93,6 +95,7 @@ export interface ServerStatusInfo {
   ready: boolean;
   port?: number;
   suspended: boolean;
+  idleSince?: string;
 }
 
 export interface Agent {
@@ -111,7 +114,7 @@ export interface Agent {
   contexts?: ContextItem[];
   createdAt: string;
   labels?: Record<string, string>;
-  mode: string;
+  idleTimeout?: string;
   conditions?: Condition[];
   serverStatus?: ServerStatusInfo;
 }

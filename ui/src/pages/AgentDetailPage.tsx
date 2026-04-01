@@ -51,7 +51,7 @@ function SuspendResumeButton({ namespace, name, suspended, onSuccess }: { namesp
       <button
         onClick={handleClick}
         disabled={loading}
-        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
           displaySuspended
             ? 'bg-emerald-600 text-white hover:bg-emerald-700'
             : 'bg-amber-600 text-white hover:bg-amber-700'
@@ -173,24 +173,22 @@ function AgentDetailPage() {
                 <p className="mt-2 text-sm text-stone-500 leading-relaxed">{agent.profile}</p>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {agent.mode === 'Server' && (
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
-                  agent.serverStatus?.suspended
-                    ? 'bg-amber-50 text-amber-600 border-amber-200'
-                    : agent.serverStatus?.ready
-                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                      : 'bg-violet-50 text-violet-600 border-violet-200'
-                }`}>
-                  {!agent.serverStatus?.suspended && (
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                    }`} />
-                  )}
-                  {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
-                </span>
-              )}
-              {agent.mode === 'Server' && agent.serverStatus && (
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                agent.serverStatus?.suspended
+                  ? 'bg-amber-50 text-amber-600 border-amber-200'
+                  : agent.serverStatus?.ready
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                    : 'bg-violet-50 text-violet-600 border-violet-200'
+              }`}>
+                {!agent.serverStatus?.suspended && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                  }`} />
+                )}
+                {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
+              </span>
+              {agent.serverStatus && (
                 <SuspendResumeButton
                   namespace={agent.namespace}
                   name={agent.name}
@@ -200,9 +198,9 @@ function AgentDetailPage() {
               )}
               <Link
                 to={`/tasks/create?agent=${agent.namespace}/${agent.name}`}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 5v14M5 12h14" strokeLinecap="round" />
                 </svg>
                 Create Task
@@ -238,10 +236,6 @@ function AgentDetailPage() {
           <div>
             <h3 className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-4">Configuration</h3>
             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <div>
-                <dt className="text-xs text-stone-400">Mode</dt>
-                <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.mode}</dd>
-              </div>
               {agent.executorImage && (
                 <div>
                   <dt className="text-xs text-stone-400">Executor Image</dt>
@@ -295,57 +289,55 @@ function AgentDetailPage() {
           )}
 
           {/* Server Status */}
-          {agent.mode === 'Server' && (
-            <div>
-              <h3 className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-3">Server Status</h3>
-              {agent.serverStatus ? (
-                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                  <div>
-                    <dt className="text-xs text-stone-400">Deployment</dt>
-                    <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.deploymentName}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-stone-400">Service</dt>
-                    <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.serviceName}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-stone-400">URL</dt>
-                    <dd className="mt-1 text-sm text-stone-700 font-mono break-all">{agent.serverStatus.url}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-stone-400">Status</dt>
-                    <dd className="mt-1 text-sm font-mono">
-                      {agent.serverStatus.suspended ? (
-                        <span className="text-amber-600">Suspended</span>
-                      ) : agent.serverStatus.ready ? (
-                        <span className="text-emerald-600">Ready</span>
-                      ) : (
-                        <span className="text-stone-500">Not Ready</span>
-                      )}
-                    </dd>
-                  </div>
+          <div>
+            <h3 className="text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider mb-3">Server Status</h3>
+            {agent.serverStatus ? (
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <dt className="text-xs text-stone-400">Deployment</dt>
+                  <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.deploymentName}</dd>
                 </div>
-              ) : (
-                <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                    <p className="text-sm text-amber-700 font-medium">Server not ready</p>
-                  </div>
-                  <p className="text-xs text-amber-600 mt-1">
-                    The server deployment has not been created yet or is still starting up. Check controller logs for errors.
-                  </p>
+                <div>
+                  <dt className="text-xs text-stone-400">Service</dt>
+                  <dd className="mt-1 text-sm text-stone-700 font-mono">{agent.serverStatus.serviceName}</dd>
                 </div>
-              )}
-            </div>
-          )}
+                <div>
+                  <dt className="text-xs text-stone-400">URL</dt>
+                  <dd className="mt-1 text-sm text-stone-700 font-mono break-all">{agent.serverStatus.url}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-stone-400">Status</dt>
+                  <dd className="mt-1 text-sm font-mono">
+                    {agent.serverStatus.suspended ? (
+                      <span className="text-amber-600">Suspended</span>
+                    ) : agent.serverStatus.ready ? (
+                      <span className="text-emerald-600">Ready</span>
+                    ) : (
+                      <span className="text-stone-500">Not Ready</span>
+                    )}
+                  </dd>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <p className="text-sm text-amber-700 font-medium">Server not ready</p>
+                </div>
+                <p className="text-xs text-amber-600 mt-1">
+                  The server deployment has not been created yet or is still starting up. Check controller logs for errors.
+                </p>
+              </div>
+            )}
+          </div>
 
-          {/* Terminal Panel (Server mode, ready) */}
-          {agent.mode === 'Server' && agent.serverStatus && agent.serverStatus.ready && (
+          {/* Terminal Panel (ready) */}
+          {agent.serverStatus && agent.serverStatus.ready && (
             <TerminalPanel namespace={agent.namespace} agentName={agent.name} />
           )}
 
-          {/* Quick Connect (Server mode only) */}
-          {agent.mode === 'Server' && agent.serverStatus && (
+          {/* Quick Connect */}
+          {agent.serverStatus && (
             <ServerConnectCommands
               namespace={agent.namespace}
               agentName={agent.name}

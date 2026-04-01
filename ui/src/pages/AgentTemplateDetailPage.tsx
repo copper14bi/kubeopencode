@@ -67,15 +67,15 @@ function AgentTemplateDetailPage() {
               <h2 className="font-display text-xl font-bold text-stone-900">{tmpl.name}</h2>
               <p className="text-xs text-stone-400 mt-0.5 font-mono">{tmpl.namespace}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border bg-teal-50 text-teal-600 border-teal-200">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border bg-teal-50 text-teal-600 border-teal-200">
                 {tmpl.agentCount} {tmpl.agentCount === 1 ? 'Agent' : 'Agents'}
               </span>
               <Link
                 to={`/agents/create?template=${tmpl.namespace}/${tmpl.name}`}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
               >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 5v14M5 12h14" strokeLinecap="round" />
                 </svg>
                 Create Agent
@@ -143,25 +143,24 @@ function AgentTemplateDetailPage() {
                     to={`/agents/${agent.namespace}/${agent.name}`}
                     className="flex items-center justify-between bg-stone-50 rounded-lg p-3 border border-stone-100 hover:border-stone-300 transition-colors group"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                        agent.mode === 'Server' ? 'bg-violet-500' : 'bg-primary-400'
-                      }`} />
-                      <div>
-                        <span className="text-sm font-medium text-stone-800 group-hover:text-stone-900">{agent.name}</span>
-                        <span className="text-xs text-stone-400 ml-2">{agent.namespace}</span>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="min-w-0">
+                        <div>
+                          <span className="text-sm font-medium text-stone-800 group-hover:text-stone-900">{agent.name}</span>
+                          <span className="text-xs text-stone-400 ml-2">{agent.namespace}</span>
+                        </div>
+                        {agent.profile && (
+                          <p className="text-xs text-stone-400 truncate mt-0.5">{agent.profile}</p>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {agent.profile && (
-                        <span className="text-xs text-stone-400 truncate max-w-[200px]">{agent.profile}</span>
-                      )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                        agent.mode === 'Server'
-                          ? 'bg-violet-50 text-violet-600 border-violet-200'
+                        agent.serverStatus?.ready
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                           : 'bg-stone-50 text-stone-400 border-stone-200'
                       }`}>
-                        {agent.mode}
+                        {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
                       </span>
                       <svg className="w-4 h-4 text-stone-300 group-hover:text-stone-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />

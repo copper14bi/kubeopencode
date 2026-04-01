@@ -2817,9 +2817,7 @@ var _ = Describe("TaskController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port: 4096,
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())

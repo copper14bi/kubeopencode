@@ -14,7 +14,7 @@ spec:
   agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
   # Executor container image
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
-  # Attach image for Server mode Tasks
+  # Attach image for agentRef Task Pods
   attachImage: quay.io/kubeopencode/kubeopencode-agent-attach:latest
   # Working directory
   workspaceDir: /workspace

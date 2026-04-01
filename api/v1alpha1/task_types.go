@@ -67,6 +67,7 @@ const (
 // +kubebuilder:resource:scope="Namespaced",shortName=tk
 // +kubebuilder:printcolumn:JSONPath=`.status.phase`,name="Phase",type=string
 // +kubebuilder:printcolumn:JSONPath=`.status.agentRef.name`,name="Agent",type=string
+// +kubebuilder:printcolumn:JSONPath=`.status.templateRef.name`,name="Template",type=string,priority=1
 // +kubebuilder:printcolumn:JSONPath=`.status.podName`,name="Pod",type=string
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
@@ -92,7 +93,11 @@ type AgentReference struct {
 	Name string `json:"name"`
 }
 
-// TaskSpec defines the Task configuration
+// TaskSpec defines the Task configuration.
+// Exactly one of agentRef or templateRef must be set.
+//
+// +kubebuilder:validation:XValidation:rule="has(self.agentRef) || has(self.templateRef)",message="either agentRef or templateRef must be specified"
+// +kubebuilder:validation:XValidation:rule="!(has(self.agentRef) && has(self.templateRef))",message="only one of agentRef or templateRef can be specified"
 type TaskSpec struct {
 	// Description is the task instruction/prompt.
 	// The controller creates ${WORKSPACE_DIR}/task.md with this content
@@ -108,7 +113,7 @@ type TaskSpec struct {
 	// Contexts are processed in array order, with later contexts taking precedence.
 	//
 	// Context priority (lowest to highest):
-	//   1. Agent.contexts (Agent-level defaults)
+	//   1. Agent/Template contexts (defaults)
 	//   2. Task.contexts (Task-specific contexts)
 	//   3. Task.description (highest, becomes ${WORKSPACE_DIR}/task.md)
 	//
@@ -124,10 +129,19 @@ type TaskSpec struct {
 	// +optional
 	Contexts []ContextItem `json:"contexts,omitempty"`
 
-	// AgentRef references an Agent in the same namespace for this task.
-	//
-	// +required
+	// AgentRef references a running Agent in the same namespace.
+	// The Task creates a lightweight Pod that connects to the Agent's server
+	// via `opencode run --attach`.
+	// Exactly one of agentRef or templateRef must be set.
+	// +optional
 	AgentRef *AgentReference `json:"agentRef,omitempty"`
+
+	// TemplateRef references an AgentTemplate in the same namespace.
+	// The Task creates an ephemeral Pod using the template's configuration.
+	// The Pod runs standalone `opencode run` and has the same lifecycle as the Task.
+	// Exactly one of agentRef or templateRef must be set.
+	// +optional
+	TemplateRef *AgentTemplateReference `json:"templateRef,omitempty"`
 }
 
 // TaskExecutionStatus defines the observed state of Task
@@ -141,8 +155,14 @@ type TaskExecutionStatus struct {
 	Phase TaskPhase `json:"phase,omitempty"`
 
 	// AgentRef is the resolved Agent reference used for this task.
+	// Only set when the task was created with agentRef.
 	// +optional
 	AgentRef *AgentReference `json:"agentRef,omitempty"`
+
+	// TemplateRef is the resolved AgentTemplate reference used for this task.
+	// Only set when the task was created with templateRef.
+	// +optional
+	TemplateRef *AgentTemplateReference `json:"templateRef,omitempty"`
 
 	// Kubernetes Pod name
 	// +optional

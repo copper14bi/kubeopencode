@@ -34,9 +34,10 @@ KubeOpenCode brings Agentic AI capabilities into the Kubernetes ecosystem. By le
 ### Important Design Decisions
 
 - **Agent** (not KubeOpenCodeConfig) - Stable, project-independent naming
-- **agentRef** - Required reference from Task to Agent (same namespace)
+- **Agent = running instance** - Always creates Deployment + Service (no Pod mode vs Server mode)
+- **agentRef or templateRef** - Task must reference exactly one: an Agent (persistent) or AgentTemplate (ephemeral)
 - **No Batch/BatchRun** - Use Helm/Kustomize (Kubernetes-native approach)
-- **Two-container pattern**: Init container (`agentImage`) copies OpenCode binary to `/tools`, Worker container (`executorImage`) runs tasks
+- **Two-container pattern**: Init container (`agentImage`) copies OpenCode binary to `/tools`, Worker container (`executorImage`) runs the server
 
 ### Context System
 
@@ -50,21 +51,21 @@ Key behaviors:
 
 ### Agent Configuration (Summary)
 
-Key Agent spec fields: `templateRef`, `profile`, `agentImage`, `executorImage`, `command` (optional, has default), `workspaceDir` (required), `contexts`, `config` (inline JSON → `/tools/opencode.json`), `credentials`, `caBundle`, `proxy`, `imagePullSecrets`, `podSpec`, `serviceAccountName`, `maxConcurrentTasks`, `quota`, `serverConfig`.
+Key Agent spec fields: `templateRef`, `profile`, `agentImage`, `executorImage`, `attachImage`, `command` (optional, has default), `workspaceDir` (required), `port` (default: 4096), `persistence`, `suspend`, `idleTimeout` (auto-suspend/resume), `contexts`, `config` (inline JSON → `/tools/opencode.json`), `credentials`, `caBundle`, `proxy`, `imagePullSecrets`, `podSpec`, `serviceAccountName`, `maxConcurrentTasks`, `quota`.
 
-> See `docs/features.md` for detailed YAML examples of Agent configuration, proxy, credentials, concurrency, quota, and server mode.
+> See `docs/features.md` for detailed YAML examples of Agent configuration, proxy, credentials, concurrency, quota, and persistence.
 
 ### AgentTemplate
 
-Reusable base configuration referenced by Agents via `spec.templateRef.name`. Merge strategy: Agent wins for scalars; Agent **replaces** template for lists. Agent-only fields: `profile`, `serverConfig`, `templateRef`.
+Reusable blueprint serving two roles: (1) base configuration for Agents via `spec.templateRef.name`, (2) blueprint for ephemeral Tasks via `Task.spec.templateRef`. Merge strategy: Agent wins for scalars; Agent **replaces** template for lists. Agent-only fields: `profile`, `port`, `persistence`, `suspend`, `idleTimeout`, `templateRef`.
 
 > See `docs/architecture.md` for AgentTemplate spec fields and merge details.
 
-### Server Mode
+### Agent Lifecycle
 
-Agents support **Pod mode** (default, new Pod per Task) and **Server mode** (persistent Deployment + Service). Enabled by adding `serverConfig` to Agent spec. Supports persistence (sessions/workspace PVCs) and suspend/resume.
+Agent always creates a Deployment + Service running `opencode serve`. Supports persistence (sessions/workspace PVCs), manual suspend/resume (`suspend`), and automatic idle timeout (`idleTimeout` auto-suspends when no tasks, auto-resumes when task arrives).
 
-> See `docs/features.md` for Server Mode setup, persistence, suspend/resume, and comparison table.
+> See `docs/features.md` for Agent setup, persistence, suspend/resume, and comparison table.
 
 ### Task Stop
 

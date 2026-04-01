@@ -2,11 +2,11 @@
 
 This document covers the key features of KubeOpenCode.
 
-## Server Mode (Live Agents)
+## Live Agents
 
-Server Mode is KubeOpenCode's most powerful feature — it lets you run AI agents as persistent services on Kubernetes, available for interactive use anytime.
+Every Agent in KubeOpenCode is a persistent, running service on Kubernetes — available for interactive use anytime.
 
-### Why Server Mode?
+### Why Live Agents?
 
 - **Zero cold start**: The agent is always running. No waiting for container startup when you need help.
 - **Shared context**: Pre-load codebases, documentation, and organizational standards. All tasks share the same context.
@@ -25,7 +25,7 @@ Server Mode is KubeOpenCode's most powerful feature — it lets you run AI agent
 
 ### Setup
 
-Add `serverConfig` to your Agent spec to enable Server Mode:
+Creating an Agent automatically creates a persistent Deployment + Service:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -37,11 +37,10 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
-  serverConfig:
-    port: 4096                    # OpenCode server port (default: 4096)
-    persistence:
-      sessions:
-        size: "2Gi"               # Persist conversation history
+  port: 4096                      # OpenCode server port (default: 4096)
+  persistence:
+    sessions:
+      size: "2Gi"                 # Persist conversation history
   contexts:
     - name: codebase
       type: Git
@@ -71,41 +70,41 @@ kubeoc agent attach team-agent -n kubeopencode-system
 
 **Web Terminal**: Access the agent's OpenCode TUI directly from the KubeOpenCode dashboard at `http://localhost:2746`.
 
-**Programmatic Tasks**: Submit Tasks as usual — they run on the persistent server via `--attach` flag instead of creating new Pods:
+**Programmatic Tasks**: Submit Tasks referencing the Agent — they run on the persistent server via `--attach` flag:
 
 ```bash
 kubectl apply -f task.yaml
 ```
 
-### Server Mode vs Pod Mode
+### Agent vs Template Tasks
 
-| Aspect | Pod Mode (default) | Server Mode |
-|--------|-------------------|-------------|
-| Lifecycle | New Pod per Task | Persistent Deployment + Pod per Task |
-| Command | `opencode run "task"` | `opencode run --attach <url> "task"` |
-| Cold start | Yes (container startup) | No (server already running) |
-| Context sharing | None (isolated Pods) | Shared across Tasks via server |
-| Interaction | Logs only | Web Terminal, CLI attach, API |
-| Best for | Batch operations, CI/CD | Interactive coding, team agents |
+| Aspect | `agentRef` (Agent) | `templateRef` (AgentTemplate) |
+|--------|-------------------|-------------------------------|
+| Lifecycle | Persistent Deployment + lightweight Pod per Task | Ephemeral Pod per Task |
+| Command | `opencode run --attach <url> "task"` | `opencode run "task"` |
+| Cold start | No (server already running) | Yes (container startup) |
+| Context sharing | Shared across Tasks via server | Isolated per Task |
+| Interaction | Web Terminal, CLI attach, API | Logs only |
+| Best for | Interactive coding, team agents | Batch operations, CI/CD, one-off tasks |
+| Concurrency/Quota | Enforced by Agent | Not enforced |
 
-### Server Status
+### Agent Status
 
 Monitor your live agent's health:
 
 ```bash
 kubectl get agent team-agent -o wide
-# NAME         PROFILE                  MODE     STATUS
-# team-agent   Team development agent   Server   Ready
+# NAME         PROFILE                  STATUS
+# team-agent   Team development agent   Ready
 ```
 
-The Agent status includes server details:
+The Agent status includes deployment details:
 ```yaml
 status:
-  serverStatus:
-    deploymentName: team-agent-server
-    serviceName: team-agent
-    url: http://team-agent.kubeopencode-system.svc.cluster.local:4096
-    ready: true
+  deploymentName: team-agent-server
+  serviceName: team-agent
+  url: http://team-agent.kubeopencode-system.svc.cluster.local:4096
+  ready: true
   conditions:
     - type: ServerReady
       status: "True"
@@ -113,7 +112,7 @@ status:
       status: "True"
 ```
 
-See [Getting Started](getting-started.md) for a complete Server Mode walkthrough.
+See [Getting Started](getting-started.md) for a complete walkthrough.
 
 ## Flexible Context System
 
@@ -486,7 +485,7 @@ spec:
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
 ---
-# Task using specific agent
+# Task sent to a running Agent
 apiVersion: kubeopencode.io/v1alpha1
 kind: Task
 metadata:
@@ -495,6 +494,19 @@ spec:
   agentRef:
     name: opencode-devbox
   description: "Update dependencies and create a PR"
+```
+
+Tasks can also reference an AgentTemplate for ephemeral execution without a running Agent:
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Task
+metadata:
+  name: ephemeral-task
+spec:
+  templateRef:
+    name: team-config
+  description: "Run linting and formatting checks"
 ```
 
 ## Task Stop
@@ -514,9 +526,10 @@ When this annotation is detected:
 
 ## Agent Templates
 
-AgentTemplate allows teams to define reusable base configurations for Agents. One person
-maintains the shared template (images, contexts, credentials), and team members
-create personal Agents that reference it.
+AgentTemplate serves two purposes:
+
+1. **Reusable base configuration for Agents**: Teams define shared settings (images, contexts, credentials) in one template. Individual users create Agents that reference it via `templateRef`.
+2. **Blueprint for ephemeral tasks**: Tasks can reference a template directly via `templateRef` to run one-off, ephemeral Pods without a persistent Agent.
 
 ### Creating a Template
 
@@ -560,12 +573,30 @@ spec:
   maxConcurrentTasks: 3
 ```
 
+### Running Ephemeral Tasks from a Template
+
+Tasks can reference a template directly instead of a running Agent. This creates an ephemeral Pod that runs standalone and terminates when done — ideal for batch operations and CI/CD:
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Task
+metadata:
+  name: one-off-task
+spec:
+  templateRef:
+    name: team-config
+  description: |
+    Update all dependencies and run tests.
+```
+
+The Task controller creates a standalone Pod using the template's configuration. No persistent Agent is needed. Exactly one of `agentRef` or `templateRef` must be set on a Task.
+
 ### Merge Behavior
 
 When an Agent references a template:
 - **Scalar fields** (images, workspaceDir, config, etc.): Agent wins if set, otherwise template value
 - **List fields** (contexts, credentials, imagePullSecrets): Agent's list **replaces** the template's (not appended)
-- **Agent-only fields** (profile, serverConfig): Always from Agent
+- **Agent-only fields** (profile, port, persistence, suspend): Always from Agent
 
 ### Tracking
 
@@ -663,15 +694,15 @@ spec:
           effect: "NoSchedule"
 ```
 
-## Persistence (Server Mode)
+## Persistence
 
-By default, Server-mode Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), session data and workspace files are lost.
+By default, Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), session data and workspace files are lost.
 
-Persistence stores data on PersistentVolumeClaims (PVCs), so it survives pod restarts. Session and workspace persistence are configured independently. See [Server Mode (Live Agents)](#server-mode-live-agents) above for the full Server Mode overview.
+Persistence stores data on PersistentVolumeClaims (PVCs), so it survives pod restarts. Session and workspace persistence are configured independently. See [Live Agents](#live-agents) above for the full overview.
 
 ### Configuration
 
-Add `persistence` to your Agent's `serverConfig`:
+Add `persistence` to your Agent spec:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -682,13 +713,12 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
-  serverConfig:
-    port: 4096
-    persistence:
-      sessions:
-        size: "2Gi"               # default: 1Gi
-      workspace:
-        size: "20Gi"              # default: 10Gi
+  port: 4096
+  persistence:
+    sessions:
+      size: "2Gi"               # default: 1Gi
+    workspace:
+      size: "20Gi"              # default: 10Gi
 ```
 
 ### How It Works
@@ -716,39 +746,72 @@ spec:
   If the Agent's git ref changes, the existing checkout is not automatically updated.
 - Sessions and workspace can be configured independently (one, both, or neither)
 
-## Suspend/Resume (Server Mode)
+## Suspend/Resume
 
-Server-mode Agents can be suspended to save compute resources during off-hours. Suspending scales the Deployment to 0 replicas while retaining PVCs and Service — the agent can be resumed instantly without data loss.
+Agents can be suspended to save compute resources. KubeOpenCode supports both manual and automatic suspend.
 
-### Configuration
+### Manual Suspend
+
+Set `spec.suspend: true` to manually scale the Deployment to 0 replicas. PVCs and Service are retained.
 
 ```yaml
-serverConfig:
-  port: 4096
-  suspend: true    # scales deployment to 0 replicas
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: suspendable-agent
+spec:
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  suspend: true    # manual suspend — scales deployment to 0
+  persistence:
+    sessions:
+      size: "1Gi"
+```
+
+- Tasks targeting a suspended agent enter `Queued` phase with reason `AgentSuspended`
+- Set `suspend: false` to resume — queued tasks start automatically
+- API: `POST /api/v1/namespaces/{ns}/agents/{name}/suspend` and `.../resume`
+
+### Idle Timeout (Auto-Suspend/Auto-Resume)
+
+Set `spec.idleTimeout` to automatically suspend the Agent after a period of inactivity, and auto-resume when new Tasks arrive.
+
+```yaml
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: auto-scaling-agent
+spec:
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  idleTimeout: "30m"    # auto-suspend after 30 minutes with no tasks
   persistence:
     sessions:
       size: "1Gi"
     workspace:
-      size: "20Gi"
+      size: "10Gi"
 ```
 
-### How It Works
+**How it works:**
 
-- **Suspend**: Sets `spec.serverConfig.suspend: true`, Deployment scales to 0 replicas
-- **Resume**: Sets `suspend: false`, Deployment scales back to 1 replica
-- PVCs and Service are retained during suspension (no data loss, DNS stable)
-- Tasks targeting a suspended agent enter `Queued` phase with reason `AgentSuspended`
-- Queued tasks automatically start when the agent is resumed
+1. Agent starts running normally
+2. All Tasks complete → idle timer starts (`status.idleSince` is set)
+3. After 30 minutes with no new Tasks → Deployment scales to 0
+4. New Task arrives → agent controller detects it immediately → scales back to 1
+5. Agent becomes ready (~30-60s cold start) → queued Task executes
 
-### API
+**Priority:** Manual `suspend: true` always takes priority over `idleTimeout`. Auto-resume will not work while manually suspended.
 
-- `POST /api/v1/namespaces/{ns}/agents/{name}/suspend`
-- `POST /api/v1/namespaces/{ns}/agents/{name}/resume`
+**Condition reasons:**
+- `Suspended: True, reason: UserRequested` — manual suspend
+- `Suspended: True, reason: IdleTimeout` — auto-suspended after idle period
+- `Suspended: False, reason: Active` — running normally
+
+**Best used with `persistence`**: PVCs survive restarts, so session history and workspace files don't need to be re-initialized on resume.
 
 ### UI
 
-The Agent detail page shows a **Suspend/Resume** button for Server-mode agents, and the agents list shows a "Suspended" badge.
+The Agent detail page shows a **Suspend/Resume** button, and the agents list shows a "Suspended" badge. When `idleTimeout` is configured, the detail page shows the idle timeout configuration and current idle duration.
 
 ## Next Steps
 

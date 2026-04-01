@@ -1,12 +1,12 @@
 # Copyright Contributors to the KubeOpenCode project
-# Pod-mode Agent for local testing
+# Minimal Agent for local testing
 #
-# This Agent creates a new Pod for each Task (traditional mode).
-# Each Task runs in isolation with its own container.
+# This Agent runs a persistent OpenCode server without persistence.
+# Session data and workspace files use ephemeral storage.
 #
 # Features demonstrated:
 #   - templateRef: inherits shared config from AgentTemplate
-#   - Pod mode: ephemeral, one Pod per Task
+#   - Minimal agent: no persistence, no suspend
 #
 apiVersion: kubeopencode.io/v1alpha1
 kind: Agent
@@ -16,7 +16,7 @@ spec:
   # Inherit shared configuration from AgentTemplate
   templateRef:
     name: local-dev-base
-  profile: "Ephemeral pod-mode agent for isolated task execution"
+  profile: "Minimal agent for isolated task execution"
   # Required fields (also in template, but required on Agent)
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace

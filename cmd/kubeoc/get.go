@@ -77,25 +77,20 @@ Examples:
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 			if wide {
-				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tMODE\tSTATUS\tPROFILE\tTEMPLATE")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tSTATUS\tPROFILE\tTEMPLATE")
 			} else {
-				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tMODE\tSTATUS")
+				_, _ = fmt.Fprintln(w, "NAMESPACE\tNAME\tSTATUS")
 			}
 
 			for _, agent := range agents.Items {
-				mode := "Pod"
-				status := "-"
-
-				if agent.Spec.ServerConfig != nil {
-					mode = "Server"
-					switch {
-					case agent.Status.ServerStatus != nil && agent.Status.ServerStatus.Suspended:
-						status = "Suspended"
-					case agent.Status.ServerStatus != nil && agent.Status.ServerStatus.Ready:
-						status = "Ready"
-					default:
-						status = "Not Ready"
-					}
+				var status string
+				switch {
+				case agent.Status.Suspended:
+					status = "Suspended"
+				case agent.Status.Ready:
+					status = "Ready"
+				default:
+					status = "Not Ready"
 				}
 
 				if wide {
@@ -109,11 +104,11 @@ Examples:
 						template = agent.Spec.TemplateRef.Name
 					}
 
-					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
-						agent.Namespace, agent.Name, mode, status, profile, template)
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+						agent.Namespace, agent.Name, status, profile, template)
 				} else {
-					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-						agent.Namespace, agent.Name, mode, status)
+					_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n",
+						agent.Namespace, agent.Name, status)
 				}
 			}
 

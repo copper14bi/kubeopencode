@@ -68,7 +68,7 @@ spec:
                 type: string
               attachImage:
                 description: |-
-                  AttachImage specifies the lightweight image used for Server-mode --attach Pods.
+                  AttachImage specifies the lightweight image used for --attach Pods.
                   If not specified, defaults to "quay.io/kubeopencode/kubeopencode-agent-attach:latest".
                 type: string
               caBundle:
@@ -687,7 +687,7 @@ spec:
                   resources:
                     description: |-
                       Resources specifies the compute resources (CPU, memory) for the agent container.
-                      This applies to both Pod mode (per-Task Pods) and Server mode (Deployment).
+                      This applies to both the Agent's Deployment and Task Pods.
                       If not specified, uses the cluster's default resource limits.
 
                       Example:

@@ -267,12 +267,11 @@ func resolveAgentServerPod(ctx context.Context, k8sClient client.Client, namespa
 		return "", "", 0, fmt.Errorf("agent not found: %w", err)
 	}
 
-	if agent.Spec.ServerConfig == nil {
-		return "", "", 0, fmt.Errorf("agent %q is not in Server mode (no serverConfig)", agentName)
+	if agent.Status.Suspended {
+		return "", "", 0, fmt.Errorf("agent %q is suspended", agentName)
 	}
-
-	if agent.Status.ServerStatus == nil || !agent.Status.ServerStatus.Ready {
-		return "", "", 0, fmt.Errorf("agent %q server is not ready", agentName)
+	if !agent.Status.Ready {
+		return "", "", 0, fmt.Errorf("agent %q is not ready (deployment may be starting up)", agentName)
 	}
 
 	// Find the server pod using the same labels as server_builder.go

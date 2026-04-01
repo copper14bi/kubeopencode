@@ -68,9 +68,7 @@ func TestBuildServerDeployment_WithCredentials(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -160,9 +158,7 @@ func TestBuildServerDeployment_WithEntireSecretCredential(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -209,9 +205,7 @@ func TestBuildServerDeployment_WithHOMEAndSHELLEnvVars(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -265,9 +259,7 @@ func TestBuildServerDeployment_WithTextContext(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -346,9 +338,7 @@ func TestBuildServerDeployment_WithConfigMapContext(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -418,9 +408,7 @@ func TestBuildServerDeployment_WithGitContext(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -505,9 +493,7 @@ func TestBuildServerDeployment_SkipsOPENCODE_PERMISSIONWhenConfigHasPermission(t
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -542,9 +528,7 @@ func TestBuildServerDeployment_SetsOPENCODE_PERMISSIONWhenConfigHasNoPermission(
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -586,9 +570,7 @@ func TestBuildServerDeploymentWithProxy(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -677,9 +659,7 @@ func TestBuildServerDeploymentWithImagePullSecrets(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port: 4096,
 				},
 			}
 
@@ -726,9 +706,7 @@ func TestBuildServerDeploymentWithSecurityContext(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: kubeopenv1alpha1.AgentSpec{
-				ServerConfig: &kubeopenv1alpha1.ServerConfig{
-					Port: 4096,
-				},
+				Port: 4096,
 			},
 		}
 
@@ -774,9 +752,7 @@ func TestBuildServerDeploymentWithSecurityContext(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: kubeopenv1alpha1.AgentSpec{
-				ServerConfig: &kubeopenv1alpha1.ServerConfig{
-					Port: 4096,
-				},
+				Port: 4096,
 			},
 		}
 
@@ -826,9 +802,7 @@ func TestBuildServerDeploymentWithCABundle(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -918,49 +892,35 @@ func TestBuildServerSessionPVC(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		serverConfig     *kubeopenv1alpha1.ServerConfig
+		persistence      *kubeopenv1alpha1.PersistenceConfig
 		wantNil          bool
 		wantSize         string
 		wantStorageClass *string
 	}{
 		{
-			name:         "no server config",
-			serverConfig: nil,
-			wantNil:      true,
+			name:        "no persistence",
+			persistence: nil,
+			wantNil:     true,
 		},
 		{
-			name:         "no persistence",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{Port: 4096},
-			wantNil:      true,
-		},
-		{
-			name: "persistence with nil sessions",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{
-				Port:        4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{},
-			},
-			wantNil: true,
+			name:        "persistence with nil sessions",
+			persistence: &kubeopenv1alpha1.PersistenceConfig{},
+			wantNil:     true,
 		},
 		{
 			name: "sessions with defaults",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{
-					Sessions: &kubeopenv1alpha1.VolumePersistence{},
-				},
+			persistence: &kubeopenv1alpha1.PersistenceConfig{
+				Sessions: &kubeopenv1alpha1.VolumePersistence{},
 			},
 			wantNil:  false,
 			wantSize: DefaultSessionPVCSize,
 		},
 		{
 			name: "sessions with custom size and storage class",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{
-					Sessions: &kubeopenv1alpha1.VolumePersistence{
-						Size:             "5Gi",
-						StorageClassName: &storageClass,
-					},
+			persistence: &kubeopenv1alpha1.PersistenceConfig{
+				Sessions: &kubeopenv1alpha1.VolumePersistence{
+					Size:             "5Gi",
+					StorageClassName: &storageClass,
 				},
 			},
 			wantNil:          false,
@@ -977,12 +937,10 @@ func TestBuildServerSessionPVC(t *testing.T) {
 				Namespace: "default",
 			},
 			Spec: kubeopenv1alpha1.AgentSpec{
-				ServerConfig: &kubeopenv1alpha1.ServerConfig{
-					Port: 4096,
-					Persistence: &kubeopenv1alpha1.PersistenceConfig{
-						Sessions: &kubeopenv1alpha1.VolumePersistence{
-							Size: "invalid-size",
-						},
+				Port: 4096,
+				Persistence: &kubeopenv1alpha1.PersistenceConfig{
+					Sessions: &kubeopenv1alpha1.VolumePersistence{
+						Size: "invalid-size",
 					},
 				},
 			},
@@ -1004,7 +962,8 @@ func TestBuildServerSessionPVC(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: tt.serverConfig,
+					Port:        4096,
+					Persistence: tt.persistence,
 				},
 			}
 
@@ -1072,12 +1031,10 @@ func TestBuildServerDeployment_WithSessionPersistence(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{
-					Sessions: &kubeopenv1alpha1.VolumePersistence{
-						Size: "2Gi",
-					},
+			Port: 4096,
+			Persistence: &kubeopenv1alpha1.PersistenceConfig{
+				Sessions: &kubeopenv1alpha1.VolumePersistence{
+					Size: "2Gi",
 				},
 			},
 		},
@@ -1147,9 +1104,7 @@ func TestBuildServerDeployment_WithoutSessionPersistence(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-			},
+			Port: 4096,
 		},
 	}
 
@@ -1185,49 +1140,35 @@ func TestBuildServerWorkspacePVC(t *testing.T) {
 
 	tests := []struct {
 		name             string
-		serverConfig     *kubeopenv1alpha1.ServerConfig
+		persistence      *kubeopenv1alpha1.PersistenceConfig
 		wantNil          bool
 		wantSize         string
 		wantStorageClass *string
 	}{
 		{
-			name:         "no server config",
-			serverConfig: nil,
-			wantNil:      true,
+			name:        "no persistence",
+			persistence: nil,
+			wantNil:     true,
 		},
 		{
-			name:         "no persistence",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{Port: 4096},
-			wantNil:      true,
-		},
-		{
-			name: "persistence with nil workspace",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{
-				Port:        4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{},
-			},
-			wantNil: true,
+			name:        "persistence with nil workspace",
+			persistence: &kubeopenv1alpha1.PersistenceConfig{},
+			wantNil:     true,
 		},
 		{
 			name: "workspace with defaults",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{
-					Workspace: &kubeopenv1alpha1.VolumePersistence{},
-				},
+			persistence: &kubeopenv1alpha1.PersistenceConfig{
+				Workspace: &kubeopenv1alpha1.VolumePersistence{},
 			},
 			wantNil:  false,
 			wantSize: DefaultWorkspacePVCSize,
 		},
 		{
 			name: "workspace with custom size and storage class",
-			serverConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{
-					Workspace: &kubeopenv1alpha1.VolumePersistence{
-						Size:             "50Gi",
-						StorageClassName: &storageClass,
-					},
+			persistence: &kubeopenv1alpha1.PersistenceConfig{
+				Workspace: &kubeopenv1alpha1.VolumePersistence{
+					Size:             "50Gi",
+					StorageClassName: &storageClass,
 				},
 			},
 			wantNil:          false,
@@ -1240,11 +1181,9 @@ func TestBuildServerWorkspacePVC(t *testing.T) {
 		agent := &kubeopenv1alpha1.Agent{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
 			Spec: kubeopenv1alpha1.AgentSpec{
-				ServerConfig: &kubeopenv1alpha1.ServerConfig{
-					Port: 4096,
-					Persistence: &kubeopenv1alpha1.PersistenceConfig{
-						Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "invalid"},
-					},
+				Port: 4096,
+				Persistence: &kubeopenv1alpha1.PersistenceConfig{
+					Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "invalid"},
 				},
 			},
 		}
@@ -1261,7 +1200,10 @@ func TestBuildServerWorkspacePVC(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
-				Spec:       kubeopenv1alpha1.AgentSpec{ServerConfig: tt.serverConfig},
+				Spec: kubeopenv1alpha1.AgentSpec{
+					Port:        4096,
+					Persistence: tt.persistence,
+				},
 			}
 
 			pvc, err := BuildServerWorkspacePVC(agent)
@@ -1302,11 +1244,9 @@ func TestBuildServerDeployment_WithWorkspacePersistence(t *testing.T) {
 	agent := &kubeopenv1alpha1.Agent{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port: 4096,
-				Persistence: &kubeopenv1alpha1.PersistenceConfig{
-					Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "20Gi"},
-				},
+			Port: 4096,
+			Persistence: &kubeopenv1alpha1.PersistenceConfig{
+				Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "20Gi"},
 			},
 		},
 	}
@@ -1342,10 +1282,8 @@ func TestBuildServerDeployment_SuspendedAgentStillBuildsDeployment(t *testing.T)
 	agent := &kubeopenv1alpha1.Agent{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{
-				Port:    4096,
-				Suspend: true,
-			},
+			Port:    4096,
+			Suspend: true,
 		},
 	}
 	cfg := agentConfig{
@@ -1368,7 +1306,7 @@ func TestBuildServerDeployment_WithoutWorkspacePersistence(t *testing.T) {
 	agent := &kubeopenv1alpha1.Agent{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-agent", Namespace: "default"},
 		Spec: kubeopenv1alpha1.AgentSpec{
-			ServerConfig: &kubeopenv1alpha1.ServerConfig{Port: 4096},
+			Port: 4096,
 		},
 	}
 	cfg := agentConfig{

@@ -31,12 +31,18 @@ type ContextItem struct {
 	MountPath   string `json:"mountPath,omitempty"`
 }
 
+// AgentTemplateReference represents a reference to an AgentTemplate
+type AgentTemplateReference struct {
+	Name string `json:"name"`
+}
+
 // CreateTaskRequest represents a request to create a task
 type CreateTaskRequest struct {
-	Name        string          `json:"name,omitempty"`
-	Description string          `json:"description,omitempty"`
-	AgentRef    *AgentReference `json:"agentRef,omitempty"`
-	Contexts    []ContextItem   `json:"contexts,omitempty"`
+	Name        string                  `json:"name,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	AgentRef    *AgentReference         `json:"agentRef,omitempty"`
+	TemplateRef *AgentTemplateReference `json:"templateRef,omitempty"`
+	Contexts    []ContextItem           `json:"contexts,omitempty"`
 }
 
 // CreateAgentRequest represents a request to create an agent
@@ -50,18 +56,19 @@ type CreateAgentRequest struct {
 
 // TaskResponse represents a task in API responses
 type TaskResponse struct {
-	Name           string            `json:"name"`
-	Namespace      string            `json:"namespace"`
-	Phase          string            `json:"phase"`
-	Description    string            `json:"description,omitempty"`
-	AgentRef       *AgentReference   `json:"agentRef,omitempty"`
-	PodName        string            `json:"podName,omitempty"`
-	StartTime      *time.Time        `json:"startTime,omitempty"`
-	CompletionTime *time.Time        `json:"completionTime,omitempty"`
-	Duration       string            `json:"duration,omitempty"`
-	CreatedAt      time.Time         `json:"createdAt"`
-	Conditions     []Condition       `json:"conditions,omitempty"`
-	Labels         map[string]string `json:"labels,omitempty"`
+	Name           string                  `json:"name"`
+	Namespace      string                  `json:"namespace"`
+	Phase          string                  `json:"phase"`
+	Description    string                  `json:"description,omitempty"`
+	AgentRef       *AgentReference         `json:"agentRef,omitempty"`
+	TemplateRef    *AgentTemplateReference `json:"templateRef,omitempty"`
+	PodName        string                  `json:"podName,omitempty"`
+	StartTime      *time.Time              `json:"startTime,omitempty"`
+	CompletionTime *time.Time              `json:"completionTime,omitempty"`
+	Duration       string                  `json:"duration,omitempty"`
+	CreatedAt      time.Time               `json:"createdAt"`
+	Conditions     []Condition             `json:"conditions,omitempty"`
+	Labels         map[string]string       `json:"labels,omitempty"`
 }
 
 // Pagination represents pagination metadata
@@ -118,7 +125,7 @@ type AgentResponse struct {
 	Contexts           []ContextItem     `json:"contexts,omitempty"`
 	CreatedAt          time.Time         `json:"createdAt"`
 	Labels             map[string]string `json:"labels,omitempty"`
-	Mode               string            `json:"mode"`
+	IdleTimeout        string            `json:"idleTimeout,omitempty"`
 	Conditions         []Condition       `json:"conditions,omitempty"`
 	ServerStatus       *ServerStatusInfo `json:"serverStatus,omitempty"`
 }
@@ -148,14 +155,15 @@ type AgentTemplateListResponse struct {
 	Pagination *Pagination             `json:"pagination,omitempty"`
 }
 
-// ServerStatusInfo represents server status for Server-mode agents
+// ServerStatusInfo represents the status of an Agent's deployment
 type ServerStatusInfo struct {
-	DeploymentName string `json:"deploymentName,omitempty"`
-	ServiceName    string `json:"serviceName,omitempty"`
-	URL            string `json:"url,omitempty"`
-	Ready          bool   `json:"ready"`
-	Port           int32  `json:"port,omitempty"`
-	Suspended      bool   `json:"suspended"`
+	DeploymentName string     `json:"deploymentName,omitempty"`
+	ServiceName    string     `json:"serviceName,omitempty"`
+	URL            string     `json:"url,omitempty"`
+	Ready          bool       `json:"ready"`
+	Port           int32      `json:"port,omitempty"`
+	Suspended      bool       `json:"suspended"`
+	IdleSince      *time.Time `json:"idleSince,omitempty"`
 }
 
 // LogEvent represents a Server-Sent Event for log streaming

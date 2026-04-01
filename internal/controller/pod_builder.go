@@ -17,11 +17,11 @@ import (
 	kubeopenv1alpha1 "github.com/kubeopencode/kubeopencode/api/v1alpha1"
 )
 
-// agentConfig holds the resolved configuration from Agent
+// agentConfig holds the resolved configuration from Agent or AgentTemplate
 type agentConfig struct {
 	agentImage         string   // OpenCode init container image (copies binary to /tools)
 	executorImage      string   // Worker container image for task execution
-	attachImage        string   // Lightweight image for Server-mode --attach Pods
+	attachImage        string   // Lightweight image for --attach Pods
 	command            []string // Command for agent container (optional, has default)
 	workspaceDir       string
 	contexts           []kubeopenv1alpha1.ContextItem
@@ -31,10 +31,12 @@ type agentConfig struct {
 	serviceAccountName string
 	maxConcurrentTasks *int32
 	quota              *kubeopenv1alpha1.QuotaConfig
-	caBundle           *kubeopenv1alpha1.CABundleConfig // Custom CA bundle configuration (nil = no custom CA)
-	proxy              *kubeopenv1alpha1.ProxyConfig    // HTTP/HTTPS proxy configuration (nil = no proxy)
-	imagePullSecrets   []corev1.LocalObjectReference    // Image pull secrets for private registries
-	serverConfig       *kubeopenv1alpha1.ServerConfig   // Server mode configuration (nil = Pod mode)
+	caBundle           *kubeopenv1alpha1.CABundleConfig    // Custom CA bundle configuration (nil = no custom CA)
+	proxy              *kubeopenv1alpha1.ProxyConfig       // HTTP/HTTPS proxy configuration (nil = no proxy)
+	imagePullSecrets   []corev1.LocalObjectReference       // Image pull secrets for private registries
+	port               int32                               // Server port (default 4096)
+	persistence        *kubeopenv1alpha1.PersistenceConfig // Persistence configuration
+	suspend            bool                                // Whether Agent is suspended
 }
 
 // ResolveAgentConfig extracts configuration from the Agent spec.
@@ -55,7 +57,32 @@ func ResolveAgentConfig(agent *kubeopenv1alpha1.Agent) agentConfig {
 		caBundle:           agent.Spec.CABundle,
 		proxy:              agent.Spec.Proxy,
 		imagePullSecrets:   agent.Spec.ImagePullSecrets,
-		serverConfig:       agent.Spec.ServerConfig,
+		port:               agent.Spec.Port,
+		persistence:        agent.Spec.Persistence,
+		suspend:            agent.Spec.Suspend,
+	}
+}
+
+// ResolveTemplateToConfig extracts configuration from an AgentTemplate spec
+// for use with templateRef-based Tasks (ephemeral Pods).
+// Note: maxConcurrentTasks and quota are intentionally NOT populated because
+// templateRef tasks have no persistent Agent to enforce limits against.
+// port, persistence, and suspend are also not applicable for ephemeral Pods.
+func ResolveTemplateToConfig(tmpl *kubeopenv1alpha1.AgentTemplate) agentConfig {
+	return agentConfig{
+		agentImage:         defaultString(tmpl.Spec.AgentImage, DefaultAgentImage),
+		executorImage:      defaultString(tmpl.Spec.ExecutorImage, DefaultExecutorImage),
+		attachImage:        defaultString(tmpl.Spec.AttachImage, DefaultAttachImage),
+		command:            tmpl.Spec.Command,
+		workspaceDir:       tmpl.Spec.WorkspaceDir,
+		contexts:           tmpl.Spec.Contexts,
+		config:             tmpl.Spec.Config,
+		credentials:        tmpl.Spec.Credentials,
+		podSpec:            tmpl.Spec.PodSpec,
+		serviceAccountName: tmpl.Spec.ServiceAccountName,
+		caBundle:           tmpl.Spec.CABundle,
+		proxy:              tmpl.Spec.Proxy,
+		imagePullSecrets:   tmpl.Spec.ImagePullSecrets,
 	}
 }
 
@@ -1015,7 +1042,7 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 		// future human-in-the-loop workflows (resuming sessions by title).
 		sessionTitle := sessionTitle(task)
 		if serverURL != "" {
-			// Server mode: use --attach flag to connect to existing OpenCode server.
+			// agentRef path: use --attach flag to connect to the Agent's OpenCode server.
 			// Tasks are non-interactive — all permissions are auto-allowed via
 			// OPENCODE_PERMISSION env var on the server, so no permission.asked
 			// events are generated. This gives natural OpenCode TUI-style output
@@ -1026,17 +1053,17 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 				fmt.Sprintf(`/tools/opencode run --attach %s --title %s "$(cat %s/task.md)"`, serverURL, shellEscape(sessionTitle), cfg.workspaceDir),
 			}
 		} else {
-			// Pod mode: run standalone OpenCode instance
+			// templateRef path: run standalone OpenCode instance
 			agentCommand = []string{
 				"sh", "-c",
 				fmt.Sprintf(`/tools/opencode run --title %s "$(cat %s/task.md)"`, shellEscape(sessionTitle), cfg.workspaceDir),
 			}
 		}
 	}
-	// Determine executor image: use lightweight attach image for Server mode
+	// Determine executor image: use lightweight attach image for agentRef tasks
 	executorImage := cfg.executorImage
 	if serverURL != "" && cfg.attachImage != "" {
-		// Server mode: use lightweight attach image (~25MB) instead of devbox (~1GB)
+		// agentRef: use lightweight attach image (~25MB) instead of devbox (~1GB)
 		// The attach image only needs the OpenCode binary since actual execution
 		// happens in the persistent server's environment
 		executorImage = cfg.attachImage

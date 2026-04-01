@@ -2,12 +2,13 @@
 
 KubeOpenCode provides **template agent images** that serve as starting points for building your own customized agents. These templates demonstrate the agent interface pattern and include common development tools, but are designed to be customized based on your specific requirements.
 
-## Two-Container Pattern
+## Container Pattern
 
-KubeOpenCode uses a **two-container pattern**:
+KubeOpenCode uses multiple container images:
 
 1. **Init Container** (`agentImage`): Contains the OpenCode CLI, copies it to a shared `/tools` volume
-2. **Worker Container** (`executorImage`): Your development environment that uses `/tools/opencode`
+2. **Worker Container** (`executorImage`): Your development environment that runs `opencode serve` in Agent Deployments, or `opencode run` in ephemeral template-based Task Pods
+3. **Attach Container** (`attachImage`): Lightweight image (~25MB) used by Task Pods that connect to a running Agent via `opencode run --attach`
 
 ## Available Images
 
@@ -15,22 +16,24 @@ KubeOpenCode uses a **two-container pattern**:
 |-------|------|-------------|
 | `opencode` | Init Container | OpenCode CLI binary |
 | `devbox` | Worker (Executor) | Universal development environment with Go, Node, Python, kubectl, helm |
+| `attach` | Attach Container | Lightweight image for connecting to Agent servers |
 | `echo` | Testing | Minimal Alpine image for E2E testing |
 
 ## Image Resolution
 
 When configuring an Agent, the controller resolves images as follows:
 
-| Configuration | Init Container | Worker Container |
-|--------------|----------------|------------------|
-| Both `agentImage` and `executorImage` set | `agentImage` | `executorImage` |
-| Only `agentImage` set (legacy) | Default OpenCode image | `agentImage` |
-| Neither set | Default OpenCode image | Default devbox image |
+| Configuration | Init Container | Worker Container | Attach Container |
+|--------------|----------------|------------------|------------------|
+| Both `agentImage` and `executorImage` set | `agentImage` | `executorImage` | `attachImage` (default if unset) |
+| Only `agentImage` set (legacy) | Default OpenCode image | `agentImage` | `attachImage` (default if unset) |
+| Neither set | Default OpenCode image | Default devbox image | Default attach image |
 
 ### Default Images
 
 - OpenCode init: `quay.io/kubeopencode/kubeopencode-agent-opencode:latest`
 - Devbox executor: `quay.io/kubeopencode/kubeopencode-agent-devbox:latest`
+- Attach: `quay.io/kubeopencode/kubeopencode-agent-attach:latest`
 
 ## Building Agent Images
 

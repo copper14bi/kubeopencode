@@ -155,13 +155,20 @@ function DashboardPage() {
                         <p className="text-xs text-stone-400 mt-0.5">{agent.namespace}</p>
                       </div>
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                          agent.mode === 'Server'
-                            ? 'bg-violet-50 text-violet-600 border border-violet-200'
-                            : 'bg-stone-50 text-stone-500 border border-stone-200'
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                          agent.serverStatus?.suspended
+                            ? 'bg-amber-50 text-amber-600 border-amber-200'
+                            : agent.serverStatus?.ready
+                              ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                              : 'bg-violet-50 text-violet-600 border-violet-200'
                         }`}
                       >
-                        {agent.mode}
+                        {!agent.serverStatus?.suspended && (
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                          }`} />
+                        )}
+                        {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
                       </span>
                     </div>
                   </Link>

@@ -21,6 +21,6 @@ Track per-Task token consumption (input/output/reasoning/cache tokens) and estim
 - A post-run hook or summary file written by `opencode run`
 - A way to retrieve `sessionID` from a completed `opencode run` without using `--format json` (which replaces human-readable logs)
 
-Additionally, Pod mode and Server mode have different data locality — session data lives on the local filesystem in Pod mode but on the remote server in Server mode — requiring different extraction strategies.
+Additionally, session data lives on the Agent's persistent server, requiring extraction from the running Deployment rather than from an ephemeral Pod.
 
 **ADR**: [ADR 0013: Defer Token Usage Tracking](https://github.com/kubeopencode/kubeopencode/blob/main/docs/adr/0013-defer-token-usage-tracking.md)

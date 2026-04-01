@@ -758,16 +758,9 @@ status:
 
 Records are automatically pruned when they fall outside the sliding window.
 
-### Server Mode (Persistent OpenCode Server)
+### Agent Lifecycle (Always Running)
 
-Agents support two execution modes:
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Pod mode** (default) | Creates a new Pod for each Task | Standard task execution |
-| **Server mode** | Runs a persistent OpenCode server (Deployment + Service) | Long-running agents, shared context |
-
-Server mode is enabled by adding `serverConfig` to the Agent spec:
+Every Agent creates a persistent Deployment + Service running `opencode serve`. There is no separate "mode" to configure — the Agent is always a running instance.
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -780,50 +773,49 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
+  port: 4096                      # OpenCode server port (default: 4096)
 
-  # Presence of serverConfig enables Server mode
-  serverConfig:
-    port: 4096                    # OpenCode server port (default: 4096)
-
-  # Resource requirements (applies to both Pod and Server modes)
+  # Resource requirements
   podSpec:
     resources:
       requests:
         memory: "512Mi"
         cpu: "500m"
 
-  # Concurrency and quota limits apply equally to Server mode
+  # Concurrency and quota limits
   maxConcurrentTasks: 10
 ```
 
-**How Server Mode Works:**
+**How It Works:**
 
 ```
-Agent Created (with serverConfig)
+Agent Created
     │
     ▼
 Agent Controller
     ├── Creates Deployment (opencode serve)
     └── Creates Service (ClusterIP)
 
-Task Created (referencing Server-mode Agent)
+Task Created (referencing Agent via agentRef)
     │
     ▼
 Task Controller
     ├── Creates Pod with command: opencode run --attach <server-url> "task"
-    ├── Standard Pod status tracking (same as Pod mode)
+    ├── Standard Pod status tracking
     └── Logs available via kubectl logs
 ```
 
-**ServerConfig Fields:**
+**Top-Level Agent Fields:**
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `port` | int32 | 4096 | Port for OpenCode server |
+| `persistence` | object | nil | Session and workspace persistence configuration |
+| `suspend` | bool | false | Suspend the Agent (scales Deployment to 0) |
 
-**Server Mode Status:**
+**Agent Status:**
 
-When an Agent is in Server mode, its status includes:
+The Agent status includes server details:
 
 ```yaml
 status:
@@ -841,18 +833,7 @@ status:
       reason: DeploymentHealthy
 ```
 
-**Key Differences:**
-
-| Aspect | Pod Mode | Server Mode |
-|--------|----------|-------------|
-| Lifecycle | Ephemeral Pod per Task | Persistent Deployment + Pod per Task |
-| Command | `opencode run "task"` | `opencode run --attach <url> "task"` |
-| Cold start | Yes | No (server already running) |
-| Context sharing | None | Shared across Tasks via server |
-| Logs | `kubectl logs <pod>` | `kubectl logs <pod>` (same) |
-| Task API | Same | Same |
-
-**Task API Unchanged**: Tasks referencing Server-mode Agents use the same API as Pod-mode. The execution mode is an Agent-level configuration, transparent to Task authors.
+**Ephemeral Tasks via AgentTemplate**: For one-off batch tasks that do not require a persistent Agent, use `templateRef` instead of `agentRef` in the Task spec. The Task controller creates an ephemeral Pod using the AgentTemplate configuration, without a long-running Deployment.
 
 ---
 

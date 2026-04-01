@@ -15,11 +15,12 @@ import (
 // +kubebuilder:printcolumn:JSONPath=`.spec.executorImage`,name="Image",type=string,priority=1
 // +kubebuilder:printcolumn:JSONPath=`.spec.serviceAccountName`,name="ServiceAccount",type=string
 // +kubebuilder:printcolumn:JSONPath=`.spec.maxConcurrentTasks`,name="MaxTasks",type=integer,priority=1
+// +kubebuilder:printcolumn:JSONPath=`.status.ready`,name="Ready",type=boolean
 // +kubebuilder:printcolumn:JSONPath=`.metadata.creationTimestamp`,name="Age",type=date
 
-// Agent defines the AI agent configuration for task execution.
-// Agent = AI agent + permissions + tools + infrastructure
-// This is the execution black box - Task creators don't need to understand execution details.
+// Agent defines a running AI agent instance.
+// When created, the controller provisions a Deployment (running OpenCode server) and a Service.
+// Tasks reference Agents via agentRef and connect using `opencode run --attach`.
 type Agent struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -62,44 +63,7 @@ type TaskStartRecord struct {
 	StartTime metav1.Time `json:"startTime"`
 }
 
-// ServerConfig enables Server mode for an Agent.
-// When ServerConfig is present, the Agent runs as a persistent OpenCode server
-// (Deployment + Service) instead of creating ephemeral Pods per Task.
-// Tasks using a Server-mode Agent create lightweight Pods that connect to the
-// server using `opencode run --attach`.
-//
-// Use Server mode for:
-//   - Long-running agents (e.g., Slack bots, interactive assistants)
-//   - Shared context across multiple Tasks (pre-loaded repositories)
-//   - Avoiding cold start latency for each Task
-type ServerConfig struct {
-	// Port is the port OpenCode server listens on.
-	// Defaults to 4096 if not specified.
-	// +optional
-	// +kubebuilder:default=4096
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=65535
-	Port int32 `json:"port,omitempty"`
-
-	// Persistence configures persistent storage for the server.
-	// When set, session data (and optionally workspace files) survive pod restarts.
-	// +optional
-	Persistence *PersistenceConfig `json:"persistence,omitempty"`
-
-	// Suspend scales the server deployment to 0 replicas when true.
-	// The server is stopped but PVCs and Service are retained, so the agent
-	// can be resumed without data loss. Tasks targeting a suspended agent
-	// enter Queued phase until the agent is resumed.
-	//
-	// This is useful for saving compute resources during off-hours while
-	// preserving session history and workspace state via persistent storage.
-	//
-	// Similar to Kubernetes CronJob's spec.suspend field.
-	// +optional
-	Suspend bool `json:"suspend,omitempty"`
-}
-
-// PersistenceConfig controls persistent storage for Server-mode Agents.
+// PersistenceConfig controls persistent storage for Agents.
 // Session and workspace persistence are configured independently.
 type PersistenceConfig struct {
 	// Sessions enables persistent storage for OpenCode session data (SQLite DB).
@@ -126,36 +90,6 @@ type VolumePersistence struct {
 	// If not specified, defaults to 1Gi for sessions and 10Gi for workspace.
 	// +optional
 	Size string `json:"size,omitempty"`
-}
-
-// ServerStatus represents the observed state of a Server-mode Agent.
-// This is only populated when ServerConfig is present in the Agent spec.
-type ServerStatus struct {
-	// DeploymentName is the name of the Kubernetes Deployment running the server.
-	// Format: "{agent-name}-server"
-	// +optional
-	DeploymentName string `json:"deploymentName,omitempty"`
-
-	// ServiceName is the name of the Kubernetes Service exposing the server.
-	// Format: "{agent-name}"
-	// +optional
-	ServiceName string `json:"serviceName,omitempty"`
-
-	// URL is the in-cluster URL to reach the OpenCode server.
-	// Format: "http://{service-name}.{namespace}.svc.cluster.local:{port}"
-	// Tasks use this URL with `opencode run --attach` to connect to the server.
-	// +optional
-	URL string `json:"url,omitempty"`
-
-	// Ready indicates whether the server deployment is ready to accept tasks.
-	// +optional
-	Ready bool `json:"ready,omitempty"`
-
-	// Suspended indicates the server is intentionally scaled to 0 replicas.
-	// When true, Ready is always false. Use this to distinguish "suspended"
-	// from "not ready due to an issue".
-	// +optional
-	Suspended bool `json:"suspended,omitempty"`
 }
 
 // ProxyConfig configures HTTP/HTTPS proxy settings for all containers in generated Pods.
@@ -221,14 +155,13 @@ type AgentSpec struct {
 	// +optional
 	ExecutorImage string `json:"executorImage,omitempty"`
 
-	// AttachImage specifies the lightweight image used for Server-mode --attach Pods.
-	// When ServerConfig is set, Tasks create Pods that run `opencode run --attach <server-url>`.
+	// AttachImage specifies the lightweight image used for --attach Pods.
+	// Tasks using agentRef create Pods that run `opencode run --attach <server-url>`.
 	// These Pods only need the OpenCode binary and network access, not the full development
 	// environment. Using a minimal image (~25MB) instead of devbox (~1GB) significantly
 	// reduces image pull time and resource usage.
 	//
 	// If not specified, defaults to "quay.io/kubeopencode/kubeopencode-agent-attach:latest".
-	// This field is ignored when ServerConfig is nil (Pod mode).
 	// +optional
 	AttachImage string `json:"attachImage,omitempty"`
 
@@ -390,26 +323,41 @@ type AgentSpec struct {
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
-	// ServerConfig enables Server mode for this Agent.
-	// When set, the Agent runs as a persistent OpenCode server (Deployment + Service)
-	// instead of creating ephemeral Pods per Task.
+	// Port is the port OpenCode server listens on inside the Agent's Deployment.
+	// Tasks connect to the Agent via this port using `opencode run --attach`.
+	// Defaults to 4096 if not specified.
+	// +optional
+	// +kubebuilder:default=4096
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int32 `json:"port,omitempty"`
+
+	// Persistence configures persistent storage for the Agent.
+	// When set, session data (and optionally workspace files) survive pod restarts.
+	// +optional
+	Persistence *PersistenceConfig `json:"persistence,omitempty"`
+
+	// Suspend scales the Agent's Deployment to 0 replicas when true.
+	// The Agent is stopped but PVCs and Service are retained, so it
+	// can be resumed without data loss. Tasks targeting a suspended Agent
+	// enter Queued phase until the Agent is resumed.
 	//
-	// Server mode is useful for:
-	//   - Long-running agents (e.g., Slack bots, interactive assistants)
-	//   - Shared context across Tasks (pre-loaded repositories, faster startup)
-	//   - Avoiding cold start latency for each Task
+	// Manual suspend always takes priority over idleTimeout.
 	//
-	// When ServerConfig is nil (default), the Agent operates in Pod mode:
-	// each Task creates a new Pod that runs to completion.
-	//
-	// In Server mode, Tasks create lightweight Pods that use `opencode run --attach`
-	// to connect to the persistent server.
+	// Similar to Kubernetes CronJob's spec.suspend field.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
+
+	// IdleTimeout configures automatic suspend after a period of inactivity.
+	// When set, the Agent's Deployment scales to 0 after this duration with
+	// no running or queued Tasks, and auto-resumes when a new Task arrives.
+	// Has no effect when spec.suspend is true (manual suspend takes priority).
 	//
 	// Example:
-	//   serverConfig:
-	//     port: 4096
+	//   idleTimeout: "30m"   # Auto-suspend after 30 minutes idle
+	//   idleTimeout: "1h"    # Auto-suspend after 1 hour idle
 	// +optional
-	ServerConfig *ServerConfig `json:"serverConfig,omitempty"`
+	IdleTimeout *metav1.Duration `json:"idleTimeout,omitempty"`
 }
 
 // AgentStatus defines the observed state of Agent
@@ -431,15 +379,42 @@ type AgentStatus struct {
 	// +listType=atomic
 	TaskStartHistory []TaskStartRecord `json:"taskStartHistory,omitempty"`
 
-	// ServerStatus contains the status of the OpenCode server when running in Server mode.
-	// This is only populated when spec.serverConfig is set.
+	// DeploymentName is the name of the Kubernetes Deployment running the Agent.
+	// Format: "{agent-name}-server"
 	// +optional
-	ServerStatus *ServerStatus `json:"serverStatus,omitempty"`
+	DeploymentName string `json:"deploymentName,omitempty"`
+
+	// ServiceName is the name of the Kubernetes Service exposing the Agent.
+	// Format: "{agent-name}"
+	// +optional
+	ServiceName string `json:"serviceName,omitempty"`
+
+	// URL is the in-cluster URL to reach the Agent's OpenCode server.
+	// Format: "http://{service-name}.{namespace}.svc.cluster.local:{port}"
+	// Tasks use this URL with `opencode run --attach` to connect to the Agent.
+	// +optional
+	URL string `json:"url,omitempty"`
+
+	// Ready indicates whether the Agent's Deployment is ready to accept tasks.
+	// +optional
+	Ready bool `json:"ready,omitempty"`
+
+	// Suspended indicates the Agent is intentionally scaled to 0 replicas.
+	// When true, Ready is always false. Use this to distinguish "suspended"
+	// from "not ready due to an issue".
+	// +optional
+	Suspended bool `json:"suspended,omitempty"`
+
+	// IdleSince records when the Agent became idle (no running or queued Tasks).
+	// Nil when Tasks are active. Used with spec.idleTimeout to determine
+	// when to auto-suspend.
+	// +optional
+	IdleSince *metav1.Time `json:"idleSince,omitempty"`
 }
 
 // AgentPodSpec defines advanced Pod configuration for agent pods.
 // This groups all Pod-level settings that control how the agent container runs.
-// These settings apply to both Pod mode and Server mode.
+// These settings apply to the Agent's Deployment and to Task Pods.
 type AgentPodSpec struct {
 	// Labels defines additional labels to add to the agent pod.
 	// These labels are applied to the Job's pod template and enable integration with:
@@ -478,7 +453,7 @@ type AgentPodSpec struct {
 	RuntimeClassName *string `json:"runtimeClassName,omitempty"`
 
 	// Resources specifies the compute resources (CPU, memory) for the agent container.
-	// This applies to both Pod mode (per-Task Pods) and Server mode (Deployment).
+	// This applies to both the Agent's Deployment and Task Pods.
 	// If not specified, uses the cluster's default resource limits.
 	//
 	// Example:

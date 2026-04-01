@@ -32,6 +32,9 @@ const (
 	// AgentLabelKey is the label key used to identify which Agent a Task uses
 	AgentLabelKey = "kubeopencode.io/agent"
 
+	// AgentTemplateLabelKey is the label key used to identify which AgentTemplate a Task uses
+	AgentTemplateLabelKey = "kubeopencode.io/agent-template"
+
 	// DefaultQueuedRequeueDelay is the default delay for requeuing queued Tasks
 	DefaultQueuedRequeueDelay = 10 * time.Second
 
@@ -97,6 +100,7 @@ type TaskReconciler struct {
 // +kubebuilder:rbac:groups=kubeopencode.io,resources=tasks/finalizers,verbs=update
 // +kubebuilder:rbac:groups=kubeopencode.io,resources=agents,verbs=get;list;watch
 // +kubebuilder:rbac:groups=kubeopencode.io,resources=agents/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubeopencode.io,resources=agenttemplates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=kubeopencode.io,resources=kubeopencodeconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -144,7 +148,7 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		}
 	}
 
-	// Update task status from Pod status (both Pod mode and Server mode use Pods now)
+	// Update task status from Pod status
 	if err := r.updateTaskStatusFromPod(ctx, task); err != nil {
 		log.Error(err, "unable to update task status")
 		return ctrl.Result{}, err
@@ -153,25 +157,61 @@ func (r *TaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	return ctrl.Result{}, nil
 }
 
-// initializeTask initializes a new Task and creates its Pod
+// initializeTask initializes a new Task and creates its Pod.
+// Two paths:
+//   - agentRef: connects to a running Agent via --attach
+//   - templateRef: creates a standalone ephemeral Pod from template config
 func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alpha1.Task) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// Get agent configuration with name (Agent must be in same namespace as Task)
-	agentConfig, agentName, err := r.getAgentConfigWithName(ctx, task)
-	if err != nil {
-		log.Error(err, "unable to get Agent")
-		return r.updateTaskFailed(ctx, task, kubeopenv1alpha1.ReasonAgentError, err)
+	// Determine which path: agentRef or templateRef
+	isTemplateRef := task.Spec.TemplateRef != nil
+
+	var cfg agentConfig
+	var refName string // agent name or template name
+	var serverURL string
+
+	if isTemplateRef {
+		// templateRef path: resolve config from AgentTemplate
+		var err error
+		cfg, refName, err = r.resolveTemplateConfig(ctx, task)
+		if err != nil {
+			log.Error(err, "unable to get AgentTemplate")
+			return r.updateTaskFailed(ctx, task, kubeopenv1alpha1.ReasonAgentError, err)
+		}
+		// No serverURL for template-based tasks (standalone Pod)
+	} else {
+		// agentRef path: resolve config from Agent
+		var err error
+		cfg, refName, err = r.getAgentConfigWithName(ctx, task)
+		if err != nil {
+			log.Error(err, "unable to get Agent")
+			return r.updateTaskFailed(ctx, task, kubeopenv1alpha1.ReasonAgentError, err)
+		}
+
+		// Agent always has a server — compute the URL for --attach
+		port := cfg.port
+		if port == 0 {
+			port = DefaultServerPort
+		}
+		serverURL = ServerURL(refName, task.Namespace, port)
 	}
 
-	// Add agent label to Task
+	// Add label to Task (agent or template label)
 	needsUpdate := false
 	if task.Labels == nil {
 		task.Labels = make(map[string]string)
 	}
-	if task.Labels[AgentLabelKey] != agentName {
-		task.Labels[AgentLabelKey] = agentName
-		needsUpdate = true
+	if isTemplateRef {
+		if task.Labels[AgentTemplateLabelKey] != refName {
+			task.Labels[AgentTemplateLabelKey] = refName
+			needsUpdate = true
+		}
+	} else {
+		if task.Labels[AgentLabelKey] != refName {
+			task.Labels[AgentLabelKey] = refName
+			needsUpdate = true
+		}
 	}
 
 	if needsUpdate {
@@ -183,127 +223,124 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// Check if agent is suspended (Server mode only)
-	// Use agentConfig.serverConfig directly — no extra API call needed
-	if agentConfig.serverConfig != nil && agentConfig.serverConfig.Suspend {
-		log.Info("agent is suspended, queueing task", "agent", agentName)
-		r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "Queued", "Queued", "Agent %q is suspended, task queued", agentName)
-
-		task.Status.ObservedGeneration = task.Generation
-		task.Status.Phase = kubeopenv1alpha1.TaskPhaseQueued
-		task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{Name: agentName}
-
-		meta.SetStatusCondition(&task.Status.Conditions, metav1.Condition{
-			Type:    kubeopenv1alpha1.ConditionTypeQueued,
-			Status:  metav1.ConditionTrue,
-			Reason:  kubeopenv1alpha1.ReasonAgentSuspended,
-			Message: fmt.Sprintf("Agent %q is suspended", agentName),
-		})
-
-		if err := r.Status().Update(ctx, task); err != nil {
-			log.Error(err, "unable to update Task status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{RequeueAfter: DefaultQueuedRequeueDelay}, nil
-	}
-
-	// Check agent capacity if MaxConcurrentTasks is set
-	if agentConfig.maxConcurrentTasks != nil && *agentConfig.maxConcurrentTasks > 0 {
-		hasCapacity, err := r.checkAgentCapacity(ctx, task.Namespace, agentName, *agentConfig.maxConcurrentTasks)
-		if err != nil {
-			log.Error(err, "unable to check agent capacity")
-			return ctrl.Result{}, err
-		}
-
-		if !hasCapacity {
-			// Agent is at capacity, queue the task
-			log.Info("agent at capacity, queueing task", "agent", agentName, "maxConcurrent", *agentConfig.maxConcurrentTasks)
-			r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "Queued", "Queued", "Agent %q at capacity (max: %d), task queued", agentName, *agentConfig.maxConcurrentTasks)
+	// For agentRef tasks: check suspend, capacity, and quota
+	if !isTemplateRef {
+		// Check if agent is suspended
+		if cfg.suspend {
+			log.Info("agent is suspended, queueing task", "agent", refName)
+			r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "Queued", "Queued", "Agent %q is suspended, task queued", refName)
 
 			task.Status.ObservedGeneration = task.Generation
 			task.Status.Phase = kubeopenv1alpha1.TaskPhaseQueued
-			task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{
-				Name: agentName,
-			}
+			task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{Name: refName}
 
 			meta.SetStatusCondition(&task.Status.Conditions, metav1.Condition{
 				Type:    kubeopenv1alpha1.ConditionTypeQueued,
 				Status:  metav1.ConditionTrue,
-				Reason:  kubeopenv1alpha1.ReasonAgentAtCapacity,
-				Message: fmt.Sprintf("Waiting for agent %q capacity (max: %d)", agentName, *agentConfig.maxConcurrentTasks),
+				Reason:  kubeopenv1alpha1.ReasonAgentSuspended,
+				Message: fmt.Sprintf("Agent %q is suspended", refName),
 			})
 
 			if err := r.Status().Update(ctx, task); err != nil {
 				log.Error(err, "unable to update Task status")
 				return ctrl.Result{}, err
 			}
-
-			// Requeue with delay
 			return ctrl.Result{RequeueAfter: DefaultQueuedRequeueDelay}, nil
 		}
-	}
 
-	// Check agent quota if configured
-	if agentConfig.quota != nil {
-		agent, err := r.getAgentForQuota(ctx, agentName, task.Namespace)
-		if err != nil {
-			log.Error(err, "unable to get Agent for quota check")
-			return ctrl.Result{}, err
-		}
-
-		hasQuota, requeueDelay, err := r.checkAgentQuota(ctx, agent)
-		if err != nil {
-			log.Error(err, "unable to check agent quota")
-			return ctrl.Result{}, err
-		}
-
-		if !hasQuota {
-			// Quota exceeded, queue the task
-			log.Info("agent quota exceeded, queueing task",
-				"agent", agentName,
-				"maxTaskStarts", agentConfig.quota.MaxTaskStarts,
-				"windowSeconds", agentConfig.quota.WindowSeconds)
-			r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "QuotaExceeded", "Queued", "Agent %q quota exceeded (max: %d per %ds), task queued", agentName, agentConfig.quota.MaxTaskStarts, agentConfig.quota.WindowSeconds)
-
-			task.Status.ObservedGeneration = task.Generation
-			task.Status.Phase = kubeopenv1alpha1.TaskPhaseQueued
-			task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{
-				Name: agentName,
-			}
-
-			meta.SetStatusCondition(&task.Status.Conditions, metav1.Condition{
-				Type:   kubeopenv1alpha1.ConditionTypeQueued,
-				Status: metav1.ConditionTrue,
-				Reason: kubeopenv1alpha1.ReasonQuotaExceeded,
-				Message: fmt.Sprintf("Waiting for agent %q quota (max: %d per %ds)",
-					agentName, agentConfig.quota.MaxTaskStarts, agentConfig.quota.WindowSeconds),
-			})
-
-			if err := r.Status().Update(ctx, task); err != nil {
-				log.Error(err, "unable to update Task status")
+		// Check agent capacity if MaxConcurrentTasks is set
+		if cfg.maxConcurrentTasks != nil && *cfg.maxConcurrentTasks > 0 {
+			hasCapacity, err := r.checkAgentCapacity(ctx, task.Namespace, refName, *cfg.maxConcurrentTasks)
+			if err != nil {
+				log.Error(err, "unable to check agent capacity")
 				return ctrl.Result{}, err
 			}
 
-			return ctrl.Result{RequeueAfter: requeueDelay}, nil
+			if !hasCapacity {
+				log.Info("agent at capacity, queueing task", "agent", refName, "maxConcurrent", *cfg.maxConcurrentTasks)
+				r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "Queued", "Queued", "Agent %q at capacity (max: %d), task queued", refName, *cfg.maxConcurrentTasks)
+
+				task.Status.ObservedGeneration = task.Generation
+				task.Status.Phase = kubeopenv1alpha1.TaskPhaseQueued
+				task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{
+					Name: refName,
+				}
+
+				meta.SetStatusCondition(&task.Status.Conditions, metav1.Condition{
+					Type:    kubeopenv1alpha1.ConditionTypeQueued,
+					Status:  metav1.ConditionTrue,
+					Reason:  kubeopenv1alpha1.ReasonAgentAtCapacity,
+					Message: fmt.Sprintf("Waiting for agent %q capacity (max: %d)", refName, *cfg.maxConcurrentTasks),
+				})
+
+				if err := r.Status().Update(ctx, task); err != nil {
+					log.Error(err, "unable to update Task status")
+					return ctrl.Result{}, err
+				}
+
+				return ctrl.Result{RequeueAfter: DefaultQueuedRequeueDelay}, nil
+			}
+		}
+
+		// Check agent quota if configured
+		if cfg.quota != nil {
+			agent, err := r.getAgentForQuota(ctx, refName, task.Namespace)
+			if err != nil {
+				log.Error(err, "unable to get Agent for quota check")
+				return ctrl.Result{}, err
+			}
+
+			hasQuota, requeueDelay, err := r.checkAgentQuota(ctx, agent)
+			if err != nil {
+				log.Error(err, "unable to check agent quota")
+				return ctrl.Result{}, err
+			}
+
+			if !hasQuota {
+				log.Info("agent quota exceeded, queueing task",
+					"agent", refName,
+					"maxTaskStarts", cfg.quota.MaxTaskStarts,
+					"windowSeconds", cfg.quota.WindowSeconds)
+				r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "QuotaExceeded", "Queued", "Agent %q quota exceeded (max: %d per %ds), task queued", refName, cfg.quota.MaxTaskStarts, cfg.quota.WindowSeconds)
+
+				task.Status.ObservedGeneration = task.Generation
+				task.Status.Phase = kubeopenv1alpha1.TaskPhaseQueued
+				task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{
+					Name: refName,
+				}
+
+				meta.SetStatusCondition(&task.Status.Conditions, metav1.Condition{
+					Type:   kubeopenv1alpha1.ConditionTypeQueued,
+					Status: metav1.ConditionTrue,
+					Reason: kubeopenv1alpha1.ReasonQuotaExceeded,
+					Message: fmt.Sprintf("Waiting for agent %q quota (max: %d per %ds)",
+						refName, cfg.quota.MaxTaskStarts, cfg.quota.WindowSeconds),
+				})
+
+				if err := r.Status().Update(ctx, task); err != nil {
+					log.Error(err, "unable to update Task status")
+					return ctrl.Result{}, err
+				}
+
+				return ctrl.Result{RequeueAfter: requeueDelay}, nil
+			}
 		}
 	}
 
 	// Pre-occupy capacity slot by setting Task status to Running BEFORE creating Pod.
-	// This prevents race condition where multiple Tasks pass capacity check simultaneously.
-	// If Pod creation fails later, status will be set to Failed (not reverted to empty).
 	if task.Status.Phase != kubeopenv1alpha1.TaskPhaseRunning {
 		task.Status.ObservedGeneration = task.Generation
 		task.Status.Phase = kubeopenv1alpha1.TaskPhaseRunning
-		task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{
-			Name: agentName,
+		if isTemplateRef {
+			task.Status.TemplateRef = &kubeopenv1alpha1.AgentTemplateReference{Name: refName}
+		} else {
+			task.Status.AgentRef = &kubeopenv1alpha1.AgentReference{Name: refName}
 		}
 		now := metav1.Now()
 		task.Status.StartTime = &now
 
 		if err := r.Status().Update(ctx, task); err != nil {
 			if errors.IsConflict(err) {
-				// Optimistic lock conflict - another reconcile is in progress
-				// Requeue to let it complete first
 				log.V(1).Info("conflict pre-occupying capacity slot, requeuing")
 				return ctrl.Result{Requeue: true}, nil
 			}
@@ -317,17 +354,11 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 			return ctrl.Result{}, err
 		}
 
-		log.Info("pre-occupied capacity slot", "task", task.Name, "agent", agentName)
+		log.Info("pre-occupied capacity slot", "task", task.Name, "ref", refName)
 	}
 
-	// Determine server URL for Server-mode Agents (empty for Pod mode)
-	// In Server mode, Tasks create Pods that use `opencode run --attach` to connect
-	// to the persistent OpenCode server instead of running a standalone instance.
-	serverURL := ""
-	if agentConfig.serverConfig != nil {
-		port := GetServerPort(&kubeopenv1alpha1.Agent{Spec: kubeopenv1alpha1.AgentSpec{ServerConfig: agentConfig.serverConfig}})
-		serverURL = ServerURL(agentName, task.Namespace, port)
-		log.Info("Creating Pod for Server-mode Task", "serverURL", serverURL)
+	if serverURL != "" {
+		log.Info("Creating Pod for agentRef Task", "serverURL", serverURL)
 	}
 
 	// Generate Pod name
@@ -351,10 +382,10 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 
 	// Process all contexts using priority-based resolution
 	// Priority (lowest to highest):
-	//   1. Agent.contexts (Agent-level defaults)
+	//   1. Agent/Template contexts (defaults)
 	//   2. Task.contexts (Task-specific contexts)
 	//   3. Task.description (highest, becomes ${WORKSPACE_DIR}/task.md)
-	contextConfigMap, fileMounts, dirMounts, gitMounts, err := r.processAllContexts(ctx, task, agentConfig)
+	contextConfigMap, fileMounts, dirMounts, gitMounts, err := r.processAllContexts(ctx, task, cfg)
 	if err != nil {
 		log.Error(err, "unable to process contexts")
 
@@ -387,20 +418,18 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 	// Get system configuration (image, pull policies, proxy) from cluster-scoped KubeOpenCodeConfig
 	sysCfg := r.getSystemConfig(ctx)
 
-	// Apply cluster-level defaults where Agent doesn't specify its own
-	agentConfig.applySystemDefaults(sysCfg)
+	// Apply cluster-level defaults where Agent/Template doesn't specify its own
+	cfg.applySystemDefaults(sysCfg)
 
-	// Create Pod with agent configuration and context mounts
-	// For Server-mode, serverURL is passed to generate --attach command
-	pod := buildPod(task, podName, agentConfig, contextConfigMap, fileMounts, dirMounts, gitMounts, sysCfg, serverURL)
+	// Create Pod with configuration and context mounts
+	// For agentRef, serverURL is passed to generate --attach command
+	pod := buildPod(task, podName, cfg, contextConfigMap, fileMounts, dirMounts, gitMounts, sysCfg, serverURL)
 
-	// Record task start for quota tracking BEFORE creating Pod.
-	// This ensures quota is accurate even if Pod creation fails.
-	// If Pod creation fails, we rollback the quota record.
+	// Record task start for quota tracking BEFORE creating Pod (agentRef only).
 	var quotaAgent *kubeopenv1alpha1.Agent
-	if agentConfig.quota != nil {
+	if !isTemplateRef && cfg.quota != nil {
 		var err error
-		quotaAgent, err = r.getAgentForQuota(ctx, agentName, task.Namespace)
+		quotaAgent, err = r.getAgentForQuota(ctx, refName, task.Namespace)
 		if err != nil {
 			log.Error(err, "unable to get Agent for quota recording")
 
@@ -424,7 +453,7 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 
 			return r.updateTaskFailed(ctx, task, kubeopenv1alpha1.ReasonAgentError, fmt.Errorf("failed to record quota: %v", err))
 		}
-		log.V(1).Info("recorded task start for quota", "task", task.Name, "agent", agentName)
+		log.V(1).Info("recorded task start for quota", "task", task.Name, "agent", refName)
 	}
 
 	if err := r.Create(ctx, pod); err != nil {
@@ -436,7 +465,7 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 			if rollbackErr := r.removeTaskStart(ctx, quotaAgent, task); rollbackErr != nil {
 				log.Error(rollbackErr, "failed to rollback quota record after Pod creation failure")
 			} else {
-				log.V(1).Info("rolled back quota record", "task", task.Name, "agent", agentName)
+				log.V(1).Info("rolled back quota record", "task", task.Name, "agent", refName)
 			}
 		}
 
@@ -467,7 +496,7 @@ func (r *TaskReconciler) initializeTask(ctx context.Context, task *kubeopenv1alp
 		return ctrl.Result{}, err
 	}
 
-	log.Info("initialized Task", "pod", podName, "image", agentConfig.agentImage)
+	log.Info("initialized Task", "pod", podName, "image", cfg.agentImage)
 	r.Recorder.Eventf(task, nil, corev1.EventTypeNormal, "PodCreated", "CreatePod", "Created pod %s", podName)
 	return ctrl.Result{}, nil
 }
@@ -592,6 +621,40 @@ func (r *TaskReconciler) getAgentConfigWithName(ctx context.Context, task *kubeo
 	}
 
 	return cfg, agentName, nil
+}
+
+// resolveTemplateConfig resolves configuration from an AgentTemplate for templateRef-based Tasks.
+func (r *TaskReconciler) resolveTemplateConfig(ctx context.Context, task *kubeopenv1alpha1.Task) (agentConfig, string, error) {
+	log := log.FromContext(ctx)
+
+	if task.Spec.TemplateRef == nil {
+		return agentConfig{}, "", fmt.Errorf("templateRef is nil for Task %q", task.Name)
+	}
+
+	templateName := task.Spec.TemplateRef.Name
+
+	tmpl := &kubeopenv1alpha1.AgentTemplate{}
+	tmplKey := types.NamespacedName{
+		Name:      templateName,
+		Namespace: task.Namespace,
+	}
+
+	if err := r.Get(ctx, tmplKey, tmpl); err != nil {
+		log.Error(err, "unable to get AgentTemplate", "template", templateName, "namespace", task.Namespace)
+		return agentConfig{}, "", fmt.Errorf("agent template %q not found in namespace %q: %w", templateName, task.Namespace, err)
+	}
+
+	cfg := ResolveTemplateToConfig(tmpl)
+
+	// WorkspaceDir and ServiceAccountName are required
+	if cfg.workspaceDir == "" {
+		return agentConfig{}, "", fmt.Errorf("agent template %q has empty workspaceDir", templateName)
+	}
+	if cfg.serviceAccountName == "" {
+		return agentConfig{}, "", fmt.Errorf("agent template %q has empty serviceAccountName", templateName)
+	}
+
+	return cfg, templateName, nil
 }
 
 // getAgentForQuota fetches the Agent object for quota operations.
@@ -870,6 +933,13 @@ func (r *TaskReconciler) handleQueuedTask(ctx context.Context, task *kubeopenv1a
 		return ctrl.Result{}, nil
 	}
 
+	// templateRef tasks should never be queued — they skip suspend/capacity/quota checks.
+	// Guard defensively in case a future change or manual status patch causes this.
+	if task.Spec.AgentRef == nil {
+		return r.updateTaskFailed(ctx, task, kubeopenv1alpha1.ReasonAgentError,
+			fmt.Errorf("queued task %q has no agentRef (templateRef tasks cannot be queued)", task.Name))
+	}
+
 	// Get agent configuration with name
 	agentConfig, agentName, err := r.getAgentConfigWithName(ctx, task)
 	if err != nil {
@@ -893,7 +963,7 @@ func (r *TaskReconciler) handleQueuedTask(ctx context.Context, task *kubeopenv1a
 	}
 
 	// Check if agent is still suspended
-	if agentConfig.serverConfig != nil && agentConfig.serverConfig.Suspend {
+	if agentConfig.suspend {
 		log.V(1).Info("agent still suspended, remaining queued", "agent", agentName)
 		return ctrl.Result{RequeueAfter: DefaultQueuedRequeueDelay}, nil
 	}

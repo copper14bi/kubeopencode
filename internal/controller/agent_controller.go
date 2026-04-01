@@ -28,19 +28,19 @@ const (
 	// AgentConditionServerReady indicates whether the OpenCode server is ready.
 	AgentConditionServerReady = "ServerReady"
 
-	// AgentConditionServerHealthy indicates whether the server is responding to health checks.
-	// In the Pod-based approach, this is based on Deployment readiness rather than HTTP health checks.
+	// AgentConditionServerHealthy indicates whether the Agent is responding to health checks.
+	// Based on Deployment readiness rather than HTTP health checks.
 	AgentConditionServerHealthy = "ServerHealthy"
 
-	// AgentConditionSuspended indicates whether the Agent server is intentionally suspended.
+	// AgentConditionSuspended indicates whether the Agent is intentionally suspended.
 	AgentConditionSuspended = "Suspended"
 
-	// DefaultServerReconcileInterval is how often to reconcile Server-mode Agents.
+	// DefaultServerReconcileInterval is how often to reconcile Agents.
 	DefaultServerReconcileInterval = 30 * time.Second
 )
 
 // AgentReconciler reconciles Agent resources.
-// For Server-mode Agents, it manages the Deployment and Service.
+// It manages the Deployment and Service for each Agent.
 type AgentReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -48,13 +48,14 @@ type AgentReconciler struct {
 
 // +kubebuilder:rbac:groups=kubeopencode.io,resources=agents,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=kubeopencode.io,resources=agents/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kubeopencode.io,resources=tasks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;delete
 
 // Reconcile handles Agent reconciliation.
-// For Server-mode Agents, it ensures the Deployment and Service exist and are up-to-date.
+// It ensures the Deployment and Service exist and are up-to-date.
 func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -82,16 +83,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Only handle Server-mode Agents
-	if agentCfg.serverConfig == nil {
-		if err := r.cleanupServerResources(ctx, &agent); err != nil {
-			logger.Error(err, "Failed to cleanup server resources")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
-	logger.Info("Reconciling Server-mode Agent", "agent", agent.Name)
+	logger.Info("Reconciling Agent", "agent", agent.Name)
 	sysCfg := r.getSystemConfig(ctx)
 
 	// Apply cluster-level defaults where Agent doesn't specify its own
@@ -110,6 +102,21 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// Handle idle timeout (auto-suspend/auto-resume).
+	// Only mutates in-memory status — updateAgentStatus persists all changes atomically.
+	if agent.Spec.IdleTimeout != nil && !agent.Spec.Suspend {
+		if err := r.reconcileIdleTimeout(ctx, &agent); err != nil {
+			logger.Error(err, "Failed to reconcile idle timeout")
+			return ctrl.Result{}, err
+		}
+	} else if agent.Spec.IdleTimeout == nil && agent.Status.IdleSince != nil {
+		// idleTimeout was removed — clear idle tracking (persisted by updateAgentStatus)
+		agent.Status.IdleSince = nil
+	}
+
+	// Evaluate auto-suspend once for consistency across reconcileDeployment and updateAgentStatus
+	autoSuspended := r.shouldAutoSuspend(&agent)
+
 	// Reconcile persistence PVCs if configured
 	if err := r.reconcilePVC(ctx, &agent, BuildServerSessionPVC, "session"); err != nil {
 		logger.Error(err, "Failed to reconcile session PVC")
@@ -121,7 +128,7 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Reconcile the Deployment (with context support)
-	if err := r.reconcileDeployment(ctx, &agent, agentCfg, sysCfg, contextConfigMap, fileMounts, dirMounts, gitMounts); err != nil {
+	if err := r.reconcileDeployment(ctx, &agent, autoSuspended, agentCfg, sysCfg, contextConfigMap, fileMounts, dirMounts, gitMounts); err != nil {
 		logger.Error(err, "Failed to reconcile Deployment")
 		return ctrl.Result{}, err
 	}
@@ -133,26 +140,31 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Update Agent status
-	if err := r.updateAgentStatus(ctx, &agent); err != nil {
+	if err := r.updateAgentStatus(ctx, &agent, autoSuspended); err != nil {
 		logger.Error(err, "Failed to update Agent status")
 		return ctrl.Result{}, err
 	}
 
-	// Requeue periodically to check server health
-	return ctrl.Result{RequeueAfter: DefaultServerReconcileInterval}, nil
+	// Calculate optimal requeue interval.
+	// When idle timer is running, requeue precisely when timeout expires.
+	requeueAfter := DefaultServerReconcileInterval
+	if agent.Spec.IdleTimeout != nil && !agent.Spec.Suspend && agent.Status.IdleSince != nil && !autoSuspended {
+		remaining := time.Until(agent.Status.IdleSince.Time.Add(agent.Spec.IdleTimeout.Duration))
+		if remaining > 0 && remaining < requeueAfter {
+			requeueAfter = remaining
+		}
+	}
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
 // reconcileDeployment ensures the Deployment exists and is up-to-date.
-func (r *AgentReconciler) reconcileDeployment(ctx context.Context, agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, sysCfg systemConfig, contextConfigMap *corev1.ConfigMap, fileMounts []fileMount, dirMounts []dirMount, gitMounts []gitMount) error {
+func (r *AgentReconciler) reconcileDeployment(ctx context.Context, agent *kubeopenv1alpha1.Agent, autoSuspended bool, agentCfg agentConfig, sysCfg systemConfig, contextConfigMap *corev1.ConfigMap, fileMounts []fileMount, dirMounts []dirMount, gitMounts []gitMount) error {
 	logger := log.FromContext(ctx)
 
 	desired := BuildServerDeployment(agent, agentCfg, sysCfg, contextConfigMap, fileMounts, dirMounts, gitMounts)
-	if desired == nil {
-		return nil
-	}
 
-	// Scale to 0 replicas when suspended
-	if agent.Spec.ServerConfig.Suspend {
+	// Scale to 0 replicas when manually suspended or auto-suspended due to idle timeout
+	if agent.Spec.Suspend || autoSuspended {
 		replicas := int32(0)
 		desired.Spec.Replicas = &replicas
 	}
@@ -168,7 +180,7 @@ func (r *AgentReconciler) reconcileDeployment(ctx context.Context, agent *kubeop
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Create the Deployment
-			logger.Info("Creating Deployment for Server-mode Agent", "deployment", desired.Name)
+			logger.Info("Creating Deployment for Agent", "deployment", desired.Name)
 			if err := r.Create(ctx, desired); err != nil {
 				return fmt.Errorf("failed to create Deployment: %w", err)
 			}
@@ -193,9 +205,6 @@ func (r *AgentReconciler) reconcileService(ctx context.Context, agent *kubeopenv
 	logger := log.FromContext(ctx)
 
 	desired := BuildServerService(agent)
-	if desired == nil {
-		return nil
-	}
 
 	// Set owner reference for garbage collection
 	if err := controllerutil.SetControllerReference(agent, desired, r.Scheme); err != nil {
@@ -208,7 +217,7 @@ func (r *AgentReconciler) reconcileService(ctx context.Context, agent *kubeopenv
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Create the Service
-			logger.Info("Creating Service for Server-mode Agent", "service", desired.Name)
+			logger.Info("Creating Service for Agent", "service", desired.Name)
 			if err := r.Create(ctx, desired); err != nil {
 				return fmt.Errorf("failed to create Service: %w", err)
 			}
@@ -229,26 +238,28 @@ func (r *AgentReconciler) reconcileService(ctx context.Context, agent *kubeopenv
 	return nil
 }
 
-// updateAgentStatus updates the Agent's status with server information.
+// updateAgentStatus updates the Agent's status with deployment information.
 // Health is determined by Deployment readiness (liveness/readiness probes on the Deployment
 // already check the server's /session/status endpoint).
-func (r *AgentReconciler) updateAgentStatus(ctx context.Context, agent *kubeopenv1alpha1.Agent) error {
+func (r *AgentReconciler) updateAgentStatus(ctx context.Context, agent *kubeopenv1alpha1.Agent, autoSuspended bool) error {
 	deploymentName := ServerDeploymentName(agent.Name)
-	if agent.Status.ServerStatus == nil {
-		agent.Status.ServerStatus = &kubeopenv1alpha1.ServerStatus{}
-	}
-	agent.Status.ServerStatus.DeploymentName = deploymentName
-	agent.Status.ServerStatus.ServiceName = ServerServiceName(agent.Name)
-	agent.Status.ServerStatus.URL = ServerURL(agent.Name, agent.Namespace, GetServerPort(agent))
+	agent.Status.DeploymentName = deploymentName
+	agent.Status.ServiceName = ServerServiceName(agent.Name)
+	agent.Status.URL = ServerURL(agent.Name, agent.Namespace, GetServerPort(agent))
 
-	// Handle suspended state
-	if agent.Spec.ServerConfig.Suspend {
-		agent.Status.ServerStatus.Suspended = true
-		agent.Status.ServerStatus.Ready = false
-		setAgentCondition(agent, AgentConditionSuspended, metav1.ConditionTrue, "UserRequested", "Agent is suspended")
-		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "Suspended", "Server is suspended")
+	// Handle suspended state (manual or auto-suspend)
+	if agent.Spec.Suspend {
+		agent.Status.Suspended = true
+		agent.Status.Ready = false
+		setAgentCondition(agent, AgentConditionSuspended, metav1.ConditionTrue, "UserRequested", "Agent is manually suspended")
+		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "Suspended", "Agent is suspended")
+	} else if autoSuspended {
+		agent.Status.Suspended = true
+		agent.Status.Ready = false
+		setAgentCondition(agent, AgentConditionSuspended, metav1.ConditionTrue, "IdleTimeout", fmt.Sprintf("Agent auto-suspended after %s idle", agent.Spec.IdleTimeout.Duration))
+		setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "Suspended", "Agent is auto-suspended due to idle timeout")
 	} else {
-		agent.Status.ServerStatus.Suspended = false
+		agent.Status.Suspended = false
 		setAgentCondition(agent, AgentConditionSuspended, metav1.ConditionFalse, "Active", "Agent is active")
 
 		var deployment appsv1.Deployment
@@ -257,20 +268,23 @@ func (r *AgentReconciler) updateAgentStatus(ctx context.Context, agent *kubeopen
 			if !apierrors.IsNotFound(err) {
 				return fmt.Errorf("failed to get Deployment: %w", err)
 			}
-			agent.Status.ServerStatus.Ready = false
+			agent.Status.Ready = false
+			setAgentCondition(agent, AgentConditionServerHealthy, metav1.ConditionFalse, "DeploymentNotFound", "Agent deployment not found")
 		} else {
-			agent.Status.ServerStatus.Ready = deployment.Status.ReadyReplicas > 0
+			agent.Status.Ready = deployment.Status.ReadyReplicas > 0
 
-			if agent.Status.ServerStatus.Ready {
-				setAgentCondition(agent, AgentConditionServerHealthy, metav1.ConditionTrue, "DeploymentHealthy", "Server deployment is ready")
+			if agent.Status.Ready {
+				setAgentCondition(agent, AgentConditionServerHealthy, metav1.ConditionTrue, "DeploymentHealthy", "Agent deployment is ready")
+			} else {
+				setAgentCondition(agent, AgentConditionServerHealthy, metav1.ConditionFalse, "DeploymentNotReady", "Agent deployment is not ready")
 			}
 		}
 
 		// Set ServerReady condition
-		if agent.Status.ServerStatus.Ready {
-			setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionTrue, "DeploymentReady", "Server deployment is ready")
+		if agent.Status.Ready {
+			setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionTrue, "DeploymentReady", "Agent deployment is ready")
 		} else {
-			setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "DeploymentNotReady", "Server deployment is not ready")
+			setAgentCondition(agent, AgentConditionServerReady, metav1.ConditionFalse, "DeploymentNotReady", "Agent deployment is not ready")
 		}
 	}
 
@@ -301,7 +315,7 @@ func (r *AgentReconciler) processAgentContexts(ctx context.Context, agent *kubeo
 	// Build ConfigMap data from resolved contexts
 	configMapData, fileMounts := buildContextConfigMapData(resolved, cfg.workspaceDir)
 
-	// Add OpenCode config to ConfigMap if provided (same as Pod mode)
+	// Add OpenCode config to ConfigMap if provided
 	if cfg.config != nil && *cfg.config != "" {
 		configMapKey := sanitizeConfigMapKey(OpenCodeConfigPath)
 		configMapData[configMapKey] = *cfg.config
@@ -349,7 +363,7 @@ func (r *AgentReconciler) reconcileContextConfigMap(ctx context.Context, agent *
 	err := r.Get(ctx, client.ObjectKey{Namespace: desired.Namespace, Name: desired.Name}, &existing)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Creating context ConfigMap for Server-mode Agent", "configmap", desired.Name)
+			logger.Info("Creating context ConfigMap for Agent", "configmap", desired.Name)
 			if err := r.Create(ctx, desired); err != nil {
 				return fmt.Errorf("failed to create context ConfigMap: %w", err)
 			}
@@ -394,7 +408,7 @@ func (r *AgentReconciler) reconcilePVC(ctx context.Context, agent *kubeopenv1alp
 	err = r.Get(ctx, client.ObjectKey{Namespace: desired.Namespace, Name: desired.Name}, &existing)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Creating PVC for Server-mode Agent", "pvc", desired.Name, "type", label)
+			logger.Info("Creating PVC for Agent", "pvc", desired.Name, "type", label)
 			if err := r.Create(ctx, desired); err != nil {
 				return fmt.Errorf("failed to create %s PVC: %w", label, err)
 			}
@@ -407,70 +421,89 @@ func (r *AgentReconciler) reconcilePVC(ctx context.Context, agent *kubeopenv1alp
 	return nil
 }
 
-// cleanupServerResources removes Deployment and Service if they exist.
-// This is called when an Agent is changed from Server-mode to Pod-mode.
-func (r *AgentReconciler) cleanupServerResources(ctx context.Context, agent *kubeopenv1alpha1.Agent) error {
+// shouldAutoSuspend returns true if the Agent should be auto-suspended due to idle timeout.
+func (r *AgentReconciler) shouldAutoSuspend(agent *kubeopenv1alpha1.Agent) bool {
+	if agent.Spec.IdleTimeout == nil || agent.Spec.Suspend {
+		return false
+	}
+	if agent.Status.IdleSince == nil {
+		return false
+	}
+	return time.Since(agent.Status.IdleSince.Time) >= agent.Spec.IdleTimeout.Duration
+}
+
+// countActiveTasks counts Tasks targeting this Agent that are in Running, Queued, or Pending phase.
+func (r *AgentReconciler) countActiveTasks(ctx context.Context, agentName, namespace string) (int, error) {
+	taskList := &kubeopenv1alpha1.TaskList{}
+	if err := r.List(ctx, taskList,
+		client.InNamespace(namespace),
+		client.MatchingLabels{AgentLabelKey: agentName},
+	); err != nil {
+		return 0, fmt.Errorf("failed to list tasks for agent %q: %w", agentName, err)
+	}
+
+	count := 0
+	for i := range taskList.Items {
+		phase := taskList.Items[i].Status.Phase
+		if phase == kubeopenv1alpha1.TaskPhaseRunning ||
+			phase == kubeopenv1alpha1.TaskPhaseQueued ||
+			phase == kubeopenv1alpha1.TaskPhasePending ||
+			phase == "" {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// reconcileIdleTimeout manages the idle timer for auto-suspend lifecycle.
+// Only mutates in-memory status fields — updateAgentStatus persists all changes atomically.
+// Called when idleTimeout is configured and manual suspend is not active.
+func (r *AgentReconciler) reconcileIdleTimeout(ctx context.Context, agent *kubeopenv1alpha1.Agent) error {
 	logger := log.FromContext(ctx)
 
-	// Delete Deployment if exists
-	deploymentName := ServerDeploymentName(agent.Name)
-	var deployment appsv1.Deployment
-	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: deploymentName}, &deployment); err == nil {
-		logger.Info("Cleaning up stale Deployment", "deployment", deploymentName)
-		if err := r.Delete(ctx, &deployment); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete Deployment: %w", err)
-		}
+	activeTasks, err := r.countActiveTasks(ctx, agent.Name, agent.Namespace)
+	if err != nil {
+		return err
 	}
 
-	// Delete Service if exists
-	serviceName := ServerServiceName(agent.Name)
-	var service corev1.Service
-	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: serviceName}, &service); err == nil {
-		logger.Info("Cleaning up stale Service", "service", serviceName)
-		if err := r.Delete(ctx, &service); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete Service: %w", err)
+	if activeTasks > 0 {
+		// Tasks are active — clear idle timer
+		if agent.Status.IdleSince != nil {
+			logger.Info("Tasks active, clearing idle timer", "agent", agent.Name, "activeTasks", activeTasks)
+			agent.Status.IdleSince = nil
 		}
-	}
-
-	// Delete context ConfigMap if exists
-	contextCMName := ServerContextConfigMapName(agent.Name)
-	var contextCM corev1.ConfigMap
-	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: contextCMName}, &contextCM); err == nil {
-		logger.Info("Cleaning up stale context ConfigMap", "configmap", contextCMName)
-		if err := r.Delete(ctx, &contextCM); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete context ConfigMap: %w", err)
-		}
-	}
-
-	// Delete session PVC if exists
-	sessionPVCName := ServerSessionPVCName(agent.Name)
-	var sessionPVC corev1.PersistentVolumeClaim
-	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: sessionPVCName}, &sessionPVC); err == nil {
-		logger.Info("Cleaning up stale session PVC", "pvc", sessionPVCName)
-		if err := r.Delete(ctx, &sessionPVC); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete session PVC: %w", err)
-		}
-	}
-
-	// Delete workspace PVC if exists
-	workspacePVCName := ServerWorkspacePVCName(agent.Name)
-	var workspacePVC corev1.PersistentVolumeClaim
-	if err := r.Get(ctx, client.ObjectKey{Namespace: agent.Namespace, Name: workspacePVCName}, &workspacePVC); err == nil {
-		logger.Info("Cleaning up stale workspace PVC", "pvc", workspacePVCName)
-		if err := r.Delete(ctx, &workspacePVC); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete workspace PVC: %w", err)
-		}
-	}
-
-	// Clear server status if present
-	if agent.Status.ServerStatus != nil {
-		agent.Status.ServerStatus = nil
-		if err := r.Status().Update(ctx, agent); err != nil {
-			return fmt.Errorf("failed to clear server status: %w", err)
+	} else {
+		// No active tasks — start idle timer if not already started
+		if agent.Status.IdleSince == nil {
+			now := metav1.Now()
+			agent.Status.IdleSince = &now
+			logger.Info("No active tasks, starting idle timer", "agent", agent.Name)
 		}
 	}
 
 	return nil
+}
+
+// findAgentForTask returns a reconcile request for the Agent referenced by a Task.
+// This enables the agent controller to react immediately when Tasks are created or updated,
+// supporting fast auto-resume from idle timeout.
+func (r *AgentReconciler) findAgentForTask(ctx context.Context, obj client.Object) []reconcile.Request {
+	task, ok := obj.(*kubeopenv1alpha1.Task)
+	if !ok {
+		return nil
+	}
+
+	agentName := task.Labels[AgentLabelKey]
+	if agentName == "" {
+		return nil
+	}
+
+	return []reconcile.Request{{
+		NamespacedName: types.NamespacedName{
+			Name:      agentName,
+			Namespace: task.Namespace,
+		},
+	}}
 }
 
 // setAgentCondition sets a condition on the Agent.
@@ -567,5 +600,6 @@ func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Watches(&kubeopenv1alpha1.AgentTemplate{}, handler.EnqueueRequestsFromMapFunc(r.findAgentsForTemplate)).
+		Watches(&kubeopenv1alpha1.Task{}, handler.EnqueueRequestsFromMapFunc(r.findAgentForTask)).
 		Complete(r)
 }

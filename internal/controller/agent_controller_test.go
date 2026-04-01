@@ -20,11 +20,11 @@ var _ = Describe("AgentController", func() {
 		agentNamespace = "default"
 	)
 
-	Context("When creating a Server-mode Agent", func() {
+	Context("When creating an Agent", func() {
 		It("Should create a Deployment and Service", func() {
 			agentName := "test-server-agent"
 
-			By("Creating a Server-mode Agent")
+			By("Creating an Agent")
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
@@ -34,9 +34,7 @@ var _ = Describe("AgentController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port:               4096,
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
@@ -61,7 +59,7 @@ var _ = Describe("AgentController", func() {
 				}, &service)
 			}, timeout, interval).Should(Succeed())
 
-			By("Expecting Agent status to be updated with ServerStatus")
+			By("Expecting Agent status to be updated with DeploymentName")
 			Eventually(func() bool {
 				var updatedAgent kubeopenv1alpha1.Agent
 				if err := k8sClient.Get(ctx, types.NamespacedName{
@@ -70,7 +68,7 @@ var _ = Describe("AgentController", func() {
 				}, &updatedAgent); err != nil {
 					return false
 				}
-				return updatedAgent.Status.ServerStatus != nil
+				return updatedAgent.Status.DeploymentName != ""
 			}, timeout, interval).Should(BeTrue())
 
 			By("Verifying Deployment has correct labels and selector")
@@ -96,55 +94,11 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
-	Context("When creating a Pod-mode Agent (no serverConfig)", func() {
-		It("Should NOT create a Deployment or Service", func() {
-			agentName := "test-pod-agent"
-
-			By("Creating a Pod-mode Agent")
-			agent := &kubeopenv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      agentName,
-					Namespace: agentNamespace,
-				},
-				Spec: kubeopenv1alpha1.AgentSpec{
-					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
-					WorkspaceDir:       "/workspace",
-					ServiceAccountName: "test-agent",
-					// No ServerConfig = Pod mode
-				},
-			}
-			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
-
-			By("Expecting NO Deployment to be created")
-			deploymentName := ServerDeploymentName(agentName)
-			Consistently(func() error {
-				var deployment appsv1.Deployment
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      deploymentName,
-					Namespace: agentNamespace,
-				}, &deployment)
-			}, timeout/2, interval).ShouldNot(Succeed())
-
-			By("Expecting NO Service to be created")
-			serviceName := ServerServiceName(agentName)
-			Consistently(func() error {
-				var service corev1.Service
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      serviceName,
-					Namespace: agentNamespace,
-				}, &service)
-			}, timeout/2, interval).ShouldNot(Succeed())
-
-			By("Cleaning up the Agent")
-			Expect(k8sClient.Delete(ctx, agent)).Should(Succeed())
-		})
-	})
-
-	Context("When updating a Server-mode Agent", func() {
+	Context("When updating an Agent", func() {
 		It("Should update the Deployment with new configuration", func() {
 			agentName := "test-update-agent"
 
-			By("Creating a Server-mode Agent with initial port")
+			By("Creating an Agent with initial port")
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
@@ -154,9 +108,7 @@ var _ = Describe("AgentController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port:               4096,
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
@@ -177,7 +129,7 @@ var _ = Describe("AgentController", func() {
 				Name:      agentName,
 				Namespace: agentNamespace,
 			}, &updatedAgent)).Should(Succeed())
-			updatedAgent.Spec.ServerConfig.Port = 8080
+			updatedAgent.Spec.Port = 8080
 			Expect(k8sClient.Update(ctx, &updatedAgent)).Should(Succeed())
 
 			By("Expecting the Deployment to be updated with new port")
@@ -203,75 +155,11 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
-	Context("When switching from Server-mode to Pod-mode", func() {
-		It("Should clean up Deployment and Service", func() {
-			agentName := "test-mode-switch-agent"
-
-			By("Creating a Server-mode Agent")
-			agent := &kubeopenv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      agentName,
-					Namespace: agentNamespace,
-				},
-				Spec: kubeopenv1alpha1.AgentSpec{
-					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
-					WorkspaceDir:       "/workspace",
-					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
-
-			By("Waiting for Deployment to be created")
-			deploymentName := ServerDeploymentName(agentName)
-			Eventually(func() error {
-				var deployment appsv1.Deployment
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      deploymentName,
-					Namespace: agentNamespace,
-				}, &deployment)
-			}, timeout, interval).Should(Succeed())
-
-			By("Switching to Pod-mode by removing serverConfig")
-			var updatedAgent kubeopenv1alpha1.Agent
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      agentName,
-				Namespace: agentNamespace,
-			}, &updatedAgent)).Should(Succeed())
-			updatedAgent.Spec.ServerConfig = nil
-			Expect(k8sClient.Update(ctx, &updatedAgent)).Should(Succeed())
-
-			By("Expecting the Deployment to be cleaned up")
-			Eventually(func() error {
-				var deployment appsv1.Deployment
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      deploymentName,
-					Namespace: agentNamespace,
-				}, &deployment)
-			}, timeout, interval).ShouldNot(Succeed())
-
-			By("Expecting the Service to be cleaned up")
-			serviceName := ServerServiceName(agentName)
-			Eventually(func() error {
-				var service corev1.Service
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      serviceName,
-					Namespace: agentNamespace,
-				}, &service)
-			}, timeout, interval).ShouldNot(Succeed())
-
-			By("Cleaning up the Agent")
-			Expect(k8sClient.Delete(ctx, &updatedAgent)).Should(Succeed())
-		})
-	})
-
-	Context("When creating a Server-mode Agent with session persistence", func() {
+	Context("When creating an Agent with session persistence", func() {
 		It("Should create a PVC for session data", func() {
 			agentName := "test-session-persist-agent"
 
-			By("Creating a Server-mode Agent with session persistence")
+			By("Creating an Agent with session persistence")
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
@@ -281,12 +169,10 @@ var _ = Describe("AgentController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-						Persistence: &kubeopenv1alpha1.PersistenceConfig{
-							Sessions: &kubeopenv1alpha1.VolumePersistence{
-								Size: "2Gi",
-							},
+					Port:               4096,
+					Persistence: &kubeopenv1alpha1.PersistenceConfig{
+						Sessions: &kubeopenv1alpha1.VolumePersistence{
+							Size: "2Gi",
 						},
 					},
 				},
@@ -356,11 +242,11 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
-	Context("When creating a Server-mode Agent without session persistence", func() {
+	Context("When creating an Agent without session persistence", func() {
 		It("Should NOT create a PVC", func() {
 			agentName := "test-no-persist-agent"
 
-			By("Creating a Server-mode Agent without persistence")
+			By("Creating an Agent without persistence")
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
@@ -370,9 +256,7 @@ var _ = Describe("AgentController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port:               4096,
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
@@ -392,11 +276,11 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
-	Context("When suspending a Server-mode Agent", func() {
+	Context("When suspending an Agent", func() {
 		It("Should scale Deployment to 0 replicas and set Suspended status", func() {
 			agentName := "test-suspend-agent"
 
-			By("Creating a Server-mode Agent")
+			By("Creating an Agent")
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
@@ -406,9 +290,7 @@ var _ = Describe("AgentController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port:               4096,
 				},
 			}
 			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
@@ -429,7 +311,7 @@ var _ = Describe("AgentController", func() {
 				Name:      agentName,
 				Namespace: agentNamespace,
 			}, &updatedAgent)).Should(Succeed())
-			updatedAgent.Spec.ServerConfig.Suspend = true
+			updatedAgent.Spec.Suspend = true
 			Expect(k8sClient.Update(ctx, &updatedAgent)).Should(Succeed())
 
 			By("Expecting Deployment to scale to 0 replicas")
@@ -456,7 +338,7 @@ var _ = Describe("AgentController", func() {
 				}, &a); err != nil {
 					return false
 				}
-				return a.Status.ServerStatus != nil && a.Status.ServerStatus.Suspended
+				return a.Status.Suspended
 			}, timeout, interval).Should(BeTrue())
 
 			By("Resuming the Agent")
@@ -464,7 +346,7 @@ var _ = Describe("AgentController", func() {
 				Name:      agentName,
 				Namespace: agentNamespace,
 			}, &updatedAgent)).Should(Succeed())
-			updatedAgent.Spec.ServerConfig.Suspend = false
+			updatedAgent.Spec.Suspend = false
 			Expect(k8sClient.Update(ctx, &updatedAgent)).Should(Succeed())
 
 			By("Expecting Deployment to scale back to 1 replica")
@@ -491,7 +373,7 @@ var _ = Describe("AgentController", func() {
 				}, &a); err != nil {
 					return true
 				}
-				return a.Status.ServerStatus != nil && a.Status.ServerStatus.Suspended
+				return a.Status.Suspended
 			}, timeout, interval).Should(BeFalse())
 
 			By("Cleaning up the Agent")
@@ -499,11 +381,11 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
-	Context("When creating a Server-mode Agent with workspace persistence", func() {
+	Context("When creating an Agent with workspace persistence", func() {
 		It("Should create a workspace PVC", func() {
 			agentName := "test-workspace-persist-agent"
 
-			By("Creating a Server-mode Agent with workspace persistence")
+			By("Creating an Agent with workspace persistence")
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      agentName,
@@ -513,12 +395,10 @@ var _ = Describe("AgentController", func() {
 					ExecutorImage:      "quay.io/kubeopencode/kubeopencode-agent-devbox:latest",
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "test-agent",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-						Persistence: &kubeopenv1alpha1.PersistenceConfig{
-							Workspace: &kubeopenv1alpha1.VolumePersistence{
-								Size: "10Gi",
-							},
+					Port:               4096,
+					Persistence: &kubeopenv1alpha1.PersistenceConfig{
+						Workspace: &kubeopenv1alpha1.VolumePersistence{
+							Size: "10Gi",
 						},
 					},
 				},
@@ -575,53 +455,23 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
-	Context("IsServerMode helper function", func() {
-		It("Should correctly identify server mode", func() {
-			serverAgent := &kubeopenv1alpha1.Agent{
-				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
-				},
-			}
-			Expect(IsServerMode(serverAgent)).To(BeTrue())
-
-			podAgent := &kubeopenv1alpha1.Agent{
-				Spec: kubeopenv1alpha1.AgentSpec{
-					// No ServerConfig
-				},
-			}
-			Expect(IsServerMode(podAgent)).To(BeFalse())
-		})
-	})
-
 	Context("GetServerPort helper function", func() {
 		It("Should return configured port or default", func() {
 			By("Agent with configured port")
 			agentWithPort := &kubeopenv1alpha1.Agent{
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 8080,
-					},
+					Port: 9090,
 				},
 			}
-			Expect(GetServerPort(agentWithPort)).To(Equal(int32(8080)))
+			Expect(GetServerPort(agentWithPort)).To(Equal(int32(9090)))
 
 			By("Agent with zero port (should use default)")
 			agentWithZeroPort := &kubeopenv1alpha1.Agent{
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 0,
-					},
+					Port: 0,
 				},
 			}
 			Expect(GetServerPort(agentWithZeroPort)).To(Equal(DefaultServerPort))
-
-			By("Agent without serverConfig (should use default)")
-			agentWithoutConfig := &kubeopenv1alpha1.Agent{
-				Spec: kubeopenv1alpha1.AgentSpec{},
-			}
-			Expect(GetServerPort(agentWithoutConfig)).To(Equal(DefaultServerPort))
 		})
 	})
 
@@ -642,36 +492,14 @@ var _ = Describe("AgentController", func() {
 
 var _ = Describe("DeploymentBuilder", func() {
 	Context("BuildServerDeployment", func() {
-		It("Should return nil for Pod-mode Agent", func() {
-			agent := &kubeopenv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-agent",
-					Namespace: "default",
-				},
-				Spec: kubeopenv1alpha1.AgentSpec{
-					// No ServerConfig
-				},
-			}
-			cfg := agentConfig{
-				executorImage: "test-image",
-				workspaceDir:  "/workspace",
-			}
-			sysCfg := systemConfig{}
-
-			deployment := BuildServerDeployment(agent, cfg, sysCfg, nil, nil, nil, nil)
-			Expect(deployment).To(BeNil())
-		})
-
-		It("Should build correct Deployment for Server-mode Agent", func() {
+		It("Should build correct Deployment for Agent", func() {
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server-agent",
 					Namespace: "default",
 				},
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 4096,
-					},
+					Port: 4096,
 				},
 			}
 			cfg := agentConfig{
@@ -697,9 +525,7 @@ var _ = Describe("DeploymentBuilder", func() {
 					Namespace: "default",
 				},
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						// Port not specified, should use default
-					},
+					// Port not specified, should use default
 				},
 			}
 			cfg := agentConfig{
@@ -716,31 +542,14 @@ var _ = Describe("DeploymentBuilder", func() {
 	})
 
 	Context("BuildServerService", func() {
-		It("Should return nil for Pod-mode Agent", func() {
-			agent := &kubeopenv1alpha1.Agent{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-agent",
-					Namespace: "default",
-				},
-				Spec: kubeopenv1alpha1.AgentSpec{
-					// No ServerConfig
-				},
-			}
-
-			service := BuildServerService(agent)
-			Expect(service).To(BeNil())
-		})
-
-		It("Should build correct Service for Server-mode Agent", func() {
+		It("Should build correct Service for Agent", func() {
 			agent := &kubeopenv1alpha1.Agent{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server-agent",
 					Namespace: "default",
 				},
 				Spec: kubeopenv1alpha1.AgentSpec{
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 8080,
-					},
+					Port: 8080,
 				},
 			}
 

@@ -68,7 +68,7 @@ const (
 	LabelServer   = "server"
 	LabelOpenCode = "opencode" // Tests using real OpenCode with free models
 
-	// Extended timeout for server mode tests
+	// Extended timeout for Deployment readiness tests
 	serverTimeout = time.Minute * 10
 )
 

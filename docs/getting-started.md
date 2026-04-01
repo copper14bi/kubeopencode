@@ -48,23 +48,24 @@ The Web UI provides:
 - **Task Creation**: Create new Tasks with Agent selection
 - **Agent Browser**: View available Agents and their configurations
 
-## Choose Your Mode
+## Choose Your Approach
 
-KubeOpenCode supports two execution modes. Choose the one that fits your use case:
+KubeOpenCode provides two ways to run AI tasks:
 
-| | **Server Mode (Live Agent)** | **Pod Mode (Batch Tasks)** |
+| | **Agent (Persistent)** | **AgentTemplate (Ephemeral)** |
 |---|---|---|
-| **What** | Persistent AI agent running as a service | Ephemeral Pod per Task |
+| **What** | Running AI agent as a Kubernetes service | Blueprint for one-off task Pods |
 | **Best for** | Interactive coding, team-shared agents, Slack bots | Batch operations, CI/CD pipelines, one-off tasks |
 | **Cold start** | None (server always running) | Yes (container startup per Task) |
 | **Context sharing** | Shared across Tasks via server | Isolated per Task |
 | **Interaction** | Web Terminal, CLI attach, API | Logs only |
+| **Task reference** | `agentRef` | `templateRef` |
 
-## Server Mode: Live Agent (Recommended for Getting Started)
+## Live Agent (Recommended for Getting Started)
 
-Server Mode deploys a persistent AI agent as a Kubernetes service. Your team can interact with it anytime — through the web terminal, CLI, or by submitting Tasks programmatically.
+Creating an Agent deploys a persistent AI agent as a Kubernetes service. Your team can interact with it anytime — through the web terminal, CLI, or by submitting Tasks programmatically.
 
-### 1. Create a Server-Mode Agent
+### 1. Create an Agent
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -77,13 +78,10 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
-
-  # Enable Server Mode — creates a persistent Deployment + Service
-  serverConfig:
-    port: 4096
-    persistence:
-      sessions:
-        size: "2Gi"   # Persist conversation history across restarts
+  port: 4096
+  persistence:
+    sessions:
+      size: "2Gi"   # Persist conversation history across restarts
 
   credentials:
     - name: api-key
@@ -108,8 +106,8 @@ spec:
 # Watch the Agent status
 kubectl get agents -n kubeopencode-system -w
 
-# NAME        PROFILE                         MODE     STATUS
-# dev-agent   Interactive development agent    Server   Ready
+# NAME        PROFILE                         STATUS
+# dev-agent   Interactive development agent    Ready
 
 # Check the created resources
 kubectl get deploy,svc -n kubeopencode-system -l kubeopencode.io/agent=dev-agent
@@ -142,7 +140,7 @@ kubectl port-forward -n kubeopencode-system svc/kubeopencode-server 2746:2746
 
 **Option C: Submit Tasks programmatically**
 
-Even in Server Mode, you can submit Tasks. They run on the persistent server instead of creating new Pods:
+Submit Tasks referencing the Agent. They run on the persistent server via lightweight attach Pods:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -165,30 +163,25 @@ spec:
 kubectl logs -n kubeopencode-system deploy/dev-agent-server -f
 
 # Check server health
-kubectl get agent dev-agent -n kubeopencode-system -o jsonpath='{.status.serverStatus}'
+kubectl get agent dev-agent -n kubeopencode-system -o jsonpath='{.status.ready}'
 
 # Stop the agent (scales down the Deployment)
 kubectl delete agent dev-agent -n kubeopencode-system
 ```
 
-## Pod Mode: Batch Tasks
+## Ephemeral Tasks (with AgentTemplate)
 
-Pod Mode creates an ephemeral Pod for each Task — ideal for batch operations, CI/CD pipelines, and one-off tasks.
+For batch operations, CI/CD pipelines, and one-off tasks, use an AgentTemplate. Tasks reference the template directly via `templateRef`, creating an ephemeral Pod that runs standalone and terminates when done.
 
-### 1. Create an Agent
-
-KubeOpenCode uses a **two-container pattern**:
-- **Init Container** (`agentImage`): Copies OpenCode binary to `/tools` shared volume
-- **Worker Container** (`executorImage`): Runs tasks using `/tools/opencode`
+### 1. Create an AgentTemplate
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
-kind: Agent
+kind: AgentTemplate
 metadata:
-  name: default
+  name: batch-template
   namespace: kubeopencode-system
 spec:
-  profile: "Default development agent for general tasks"
   agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
@@ -210,6 +203,10 @@ metadata:
   name: update-service-a
   namespace: kubeopencode-system
 spec:
+  # Reference the template (creates ephemeral Pod)
+  templateRef:
+    name: batch-template
+
   # Task description (becomes /workspace/task.md)
   description: |
     Update dependencies to latest versions.

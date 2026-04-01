@@ -35,7 +35,7 @@ kubectl auth can-i create pods \
 
 If denied, check the ClusterRole and ClusterRoleBinding are properly installed.
 
-### Server-mode Agent Fails with "cannot set blockOwnerDeletion"
+### Agent Fails with "cannot set blockOwnerDeletion"
 
 If controller logs show:
 
@@ -53,7 +53,7 @@ This means the controller ClusterRole is missing `agents/finalizers` permission.
   - kubeopencode.io
   resources:
   - tasks/finalizers
-  - agents/finalizers    # Required for Server-mode Agents
+  - agents/finalizers    # Required for Agents
   verbs:
   - update
 ```

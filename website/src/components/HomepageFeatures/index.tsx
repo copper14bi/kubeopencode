@@ -15,7 +15,7 @@ const FeatureList: FeatureItem[] = [
     icon: '\u26A1',
     description: (
       <>
-        Run AI agents as persistent services with Server Mode. Interactive
+        Every Agent runs as a persistent service on Kubernetes. Interactive
         terminal access, shared context across tasks, zero cold start &mdash;
         perfect for team-shared coding assistants and always-on agents.
       </>

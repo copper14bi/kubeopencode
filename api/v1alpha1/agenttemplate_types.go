@@ -51,7 +51,7 @@ type AgentTemplateSpec struct {
 	// +optional
 	ExecutorImage string `json:"executorImage,omitempty"`
 
-	// AttachImage specifies the lightweight image used for Server-mode --attach Pods.
+	// AttachImage specifies the lightweight image used for --attach Pods.
 	// If not specified, defaults to "quay.io/kubeopencode/kubeopencode-agent-attach:latest".
 	// +optional
 	AttachImage string `json:"attachImage,omitempty"`

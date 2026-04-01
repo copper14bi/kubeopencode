@@ -214,7 +214,14 @@ export const mockAgents: Agent[] = [
     credentialsCount: 2,
     maxConcurrentTasks: 5,
     createdAt: '2026-02-01T00:00:00Z',
-    mode: 'Pod',
+    serverStatus: {
+      deploymentName: 'opencode-agent-server',
+      serviceName: 'opencode-agent',
+      url: 'http://opencode-agent.default.svc.cluster.local:4096',
+      ready: true,
+      port: 4096,
+      suspended: false,
+    },
     credentials: [
       { name: 'github-token', secretRef: 'github-creds', env: 'GITHUB_TOKEN' },
       { name: 'anthropic-key', secretRef: 'ai-credentials', env: 'ANTHROPIC_API_KEY' },
@@ -238,7 +245,14 @@ export const mockAgents: Agent[] = [
     credentialsCount: 3,
     maxConcurrentTasks: 2,
     createdAt: '2026-02-10T00:00:00Z',
-    mode: 'Pod',
+    serverStatus: {
+      deploymentName: 'deploy-agent-server',
+      serviceName: 'deploy-agent',
+      url: 'http://deploy-agent.staging.svc.cluster.local:4096',
+      ready: true,
+      port: 4096,
+      suspended: false,
+    },
     credentials: [
       { name: 'github-token', secretRef: 'github-creds', env: 'GITHUB_TOKEN' },
       { name: 'gcloud-sa', secretRef: 'gcloud-sa-key', mountPath: '/etc/gcloud/sa.json' },
@@ -261,7 +275,14 @@ export const mockAgents: Agent[] = [
     maxConcurrentTasks: 1,
     quota: { maxTaskStarts: 10, windowSeconds: 3600 },
     createdAt: '2026-02-15T00:00:00Z',
-    mode: 'Pod',
+    serverStatus: {
+      deploymentName: 'prod-agent-server',
+      serviceName: 'prod-agent',
+      url: 'http://prod-agent.production.svc.cluster.local:4096',
+      ready: true,
+      port: 4096,
+      suspended: false,
+    },
     credentials: [
       { name: 'github-token', secretRef: 'prod-github-creds', env: 'GITHUB_TOKEN' },
     ],
@@ -283,7 +304,6 @@ export const mockAgents: Agent[] = [
     credentialsCount: 1,
     maxConcurrentTasks: 3,
     createdAt: '2026-03-01T00:00:00Z',
-    mode: 'Server',
     serverStatus: {
       deploymentName: 'server-agent-server',
       serviceName: 'server-agent',
@@ -307,7 +327,7 @@ export const mockAgents: Agent[] = [
   {
     name: 'pod-agent',
     namespace: 'test',
-    profile: 'Ephemeral pod-mode agent for one-off tasks',
+    profile: 'Ephemeral agent for one-off tasks',
     templateRef: { name: 'local-dev-base' },
     executorImage: 'quay.io/kubeopencode/kubeopencode-agent-devbox:latest',
     agentImage: 'quay.io/kubeopencode/kubeopencode-agent-opencode:latest',
@@ -315,7 +335,14 @@ export const mockAgents: Agent[] = [
     contextsCount: 0,
     credentialsCount: 1,
     createdAt: '2026-03-01T00:00:00Z',
-    mode: 'Pod',
+    serverStatus: {
+      deploymentName: 'pod-agent-server',
+      serviceName: 'pod-agent',
+      url: 'http://pod-agent.test.svc.cluster.local:4096',
+      ready: true,
+      port: 4096,
+      suspended: false,
+    },
     credentials: [
       { name: 'anthropic-key', secretRef: 'opencode-credentials', env: 'ANTHROPIC_API_KEY' },
     ],
@@ -324,14 +351,13 @@ export const mockAgents: Agent[] = [
   {
     name: 'suspended-agent',
     namespace: 'test',
-    profile: 'Server agent currently suspended to save compute resources',
+    profile: 'Agent currently suspended to save compute resources',
     executorImage: 'quay.io/kubeopencode/kubeopencode-agent-devbox:latest',
     agentImage: 'quay.io/kubeopencode/kubeopencode-agent-opencode:latest',
     workspaceDir: '/workspace',
     contextsCount: 0,
     credentialsCount: 1,
     createdAt: '2026-02-20T00:00:00Z',
-    mode: 'Server',
     serverStatus: {
       deploymentName: 'suspended-agent-server',
       serviceName: 'suspended-agent',
@@ -359,7 +385,14 @@ export const mockAgents: Agent[] = [
     credentialsCount: 2,
     maxConcurrentTasks: 3,
     createdAt: '2026-01-15T00:00:00Z',
-    mode: 'Pod',
+    serverStatus: {
+      deploymentName: 'platform-agent-server',
+      serviceName: 'platform-agent',
+      url: 'http://platform-agent.platform.svc.cluster.local:4096',
+      ready: true,
+      port: 4096,
+      suspended: false,
+    },
     credentials: [
       { name: 'github-token', secretRef: 'github-creds', env: 'GITHUB_TOKEN' },
       { name: 'aws-creds', secretRef: 'aws-credentials', mountPath: '/root/.aws' },

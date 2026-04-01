@@ -184,11 +184,6 @@ func (h *AgentHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // agentToResponse converts an Agent CRD to an API response
 func agentToResponse(agent *kubeopenv1alpha1.Agent) types.AgentResponse {
-	mode := "Pod"
-	if agent.Spec.ServerConfig != nil {
-		mode = "Server"
-	}
-
 	resp := types.AgentResponse{
 		Name:             agent.Name,
 		Namespace:        agent.Namespace,
@@ -200,7 +195,6 @@ func agentToResponse(agent *kubeopenv1alpha1.Agent) types.AgentResponse {
 		CredentialsCount: len(agent.Spec.Credentials),
 		CreatedAt:        agent.CreationTimestamp.Time,
 		Labels:           agent.Labels,
-		Mode:             mode,
 	}
 
 	if agent.Spec.TemplateRef != nil {
@@ -218,19 +212,26 @@ func agentToResponse(agent *kubeopenv1alpha1.Agent) types.AgentResponse {
 		}
 	}
 
+	if agent.Spec.IdleTimeout != nil {
+		resp.IdleTimeout = agent.Spec.IdleTimeout.Duration.String()
+	}
+
 	resp.Conditions = conditionsToResponse(agent.Status.Conditions)
 
-	// Add server status if in Server mode
-	if agent.Status.ServerStatus != nil {
-		resp.ServerStatus = &types.ServerStatusInfo{
-			DeploymentName: agent.Status.ServerStatus.DeploymentName,
-			ServiceName:    agent.Status.ServerStatus.ServiceName,
-			URL:            agent.Status.ServerStatus.URL,
-			Ready:          agent.Status.ServerStatus.Ready,
-			Port:           controller.GetServerPort(agent),
-			Suspended:      agent.Status.ServerStatus.Suspended,
-		}
+	// Always populate server status (Agent is always a running instance)
+	serverStatus := &types.ServerStatusInfo{
+		DeploymentName: agent.Status.DeploymentName,
+		ServiceName:    agent.Status.ServiceName,
+		URL:            agent.Status.URL,
+		Ready:          agent.Status.Ready,
+		Port:           controller.GetServerPort(agent),
+		Suspended:      agent.Status.Suspended,
 	}
+	if agent.Status.IdleSince != nil {
+		t := agent.Status.IdleSince.Time
+		serverStatus.IdleSince = &t
+	}
+	resp.ServerStatus = serverStatus
 
 	resp.Credentials = credentialsToInfo(agent.Spec.Credentials)
 	resp.Contexts = contextsToItems(agent.Spec.Contexts)
@@ -323,12 +324,7 @@ func (h *AgentHandler) setSuspendState(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	if agent.Spec.ServerConfig == nil {
-		writeError(w, http.StatusBadRequest, "Invalid operation", "Suspend is only supported for Server-mode agents")
-		return
-	}
-
-	agent.Spec.ServerConfig.Suspend = suspend
+	agent.Spec.Suspend = suspend
 	if err := k8sClient.Update(ctx, &agent); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update Agent", err.Error())
 		return

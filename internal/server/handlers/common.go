@@ -60,15 +60,15 @@ func resolveAgentServerURL(ctx context.Context, k8sClient client.Client, namespa
 		return "", fmt.Errorf("agent not found: %w", err)
 	}
 
-	if agent.Spec.ServerConfig == nil {
-		return "", fmt.Errorf("agent %q is not in Server mode (no serverConfig)", agentName)
+	if agent.Status.Suspended {
+		return "", fmt.Errorf("agent %q is suspended", agentName)
 	}
 
-	if agent.Status.ServerStatus == nil || agent.Status.ServerStatus.URL == "" {
-		return "", fmt.Errorf("agent %q server is not ready (no server URL in status)", agentName)
+	if agent.Status.URL == "" {
+		return "", fmt.Errorf("agent %q is not ready (no URL in status)", agentName)
 	}
 
-	serverURL := agent.Status.ServerStatus.URL
+	serverURL := agent.Status.URL
 	if err := validateServerURL(serverURL); err != nil {
 		return "", fmt.Errorf("agent %q has invalid server URL: %w", agentName, err)
 	}

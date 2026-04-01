@@ -51,10 +51,10 @@ Or build individual agent images as needed:
 ```bash
 make agent-build AGENT=opencode    # OpenCode init container (copies /opencode binary)
 make agent-build AGENT=devbox      # Executor container (development environment)
-make agent-build AGENT=attach      # Attach image (required for Server mode)
+make agent-build AGENT=attach      # Attach image (used by agentRef task Pods)
 ```
 
-> **Note:** The `attach` image is required for **Server mode** Agents. If you only use Pod mode, you can skip it. However, `make agent-build-all` is recommended to avoid missing images.
+> **Note:** The `attach` image is required for Tasks that reference Agents via `agentRef`. `make agent-build-all` is recommended to avoid missing images.
 
 **Note:** The unified kubeopencode image provides both controller and infrastructure utilities:
 - `kubeopencode controller`: Kubernetes controller
@@ -75,7 +75,7 @@ for img in opencode devbox attach; do
 done
 ```
 
-> **Important:** All three agent images must be loaded. Missing the `attach` image will cause Server mode Tasks to fail with `ErrImagePull`.
+> **Important:** All three agent images must be loaded. Missing the `attach` image will cause `agentRef` Tasks to fail with `ErrImagePull`.
 
 ### 4. Deploy with Helm
 
@@ -303,7 +303,7 @@ kubectl get agenttemplate -n test
 # Verify the Agents are ready
 kubectl get agent -n test
 
-# For Server mode, verify the deployment is created
+# Verify the agent deployments are created
 kubectl get deployment -n test
 ```
 
@@ -317,8 +317,8 @@ kubectl get deployment -n test
 | ServiceAccount | `kubeopencode-agent` | Agent service account |
 | Role/RoleBinding | `kubeopencode-agent` | RBAC permissions |
 | AgentTemplate | `local-dev-base` | Shared base configuration (images, credentials, workspace) |
-| Agent | `server-agent` | Server-mode agent with session + workspace persistence |
-| Agent | `pod-agent` | Pod-mode agent (ephemeral, per-task) |
+| Agent | `server-agent` | Persistent agent with session + workspace persistence |
+| Agent | `pod-agent` | Persistent agent (minimal, no persistence) |
 
 ### Features Demonstrated
 
@@ -327,17 +327,15 @@ The local-dev resources showcase the following features:
 | Feature | Resource | Description |
 |---------|----------|-------------|
 | **AgentTemplate** | `local-dev-base` | Shared config inherited by both Agents via `templateRef` |
-| **Server Mode** | `server-agent` | Persistent OpenCode server (Deployment + Service) |
-| **Session Persistence** | `server-agent` | Conversation history survives pod restarts (1Gi PVC) |
-| **Workspace Persistence** | `server-agent` | Git repos and files survive pod restarts (5Gi PVC) |
+| **Persistence** | `server-agent` | Persistent OpenCode server with session (1Gi) + workspace (5Gi) PVCs |
 | **Suspend/Resume** | `server-agent` | Can be suspended to save compute (see below) |
 | **Concurrency Control** | `server-agent` | Limited to 3 concurrent tasks |
-| **Pod Mode** | `pod-agent` | Ephemeral one-Pod-per-Task execution |
+| **Minimal Agent** | `pod-agent` | Agent without persistence (uses ephemeral storage) |
 | **Agent Profile** | Both agents | Human-readable description for discovery |
 
 ### Test Tasks
 
-#### Server Mode Test
+#### Agent Task Test (agentRef)
 
 ```bash
 kubectl apply -n test -f - <<EOF
@@ -356,7 +354,7 @@ kubectl get task -n test
 kubectl logs -n test server-test-pod -c agent
 ```
 
-#### Pod Mode Test
+#### Minimal Agent Task Test
 
 ```bash
 kubectl apply -n test -f - <<EOF
@@ -397,7 +395,7 @@ kubectl get task -n test -w
 
 ### Testing Persistence
 
-Session and workspace persistence let the server-agent retain state across pod restarts.
+Session and workspace persistence let the server-agent retain state across pod restarts (configured via the `persistence` field).
 
 #### Verify PVCs Are Created
 
@@ -456,7 +454,7 @@ kubectl rollout restart deployment/server-agent-server -n test
 
 ### Testing Suspend/Resume
 
-Server-mode agents can be suspended to save compute resources while retaining all data.
+Agents can be suspended to save compute resources while retaining all data.
 
 #### Suspend the Agent
 
@@ -464,8 +462,7 @@ Server-mode agents can be suspended to save compute resources while retaining al
 # Edit the agent to set suspend: true
 kubectl patch agent server-agent -n test --type=merge -p '
 spec:
-  serverConfig:
-    suspend: true
+  suspend: true
 '
 
 # Verify the deployment is scaled to 0
@@ -473,7 +470,7 @@ kubectl get deployment -n test
 # Expected: server-agent-server   0/0
 
 # Check agent status
-kubectl get agent server-agent -n test -o jsonpath='{.status.serverStatus.suspended}'
+kubectl get agent server-agent -n test -o jsonpath='{.status.suspended}'
 # Expected: true
 
 # PVCs are retained (no data loss)
@@ -506,8 +503,7 @@ kubectl get task queued-test -n test -o jsonpath='{.status.phase}'
 # Resume the agent
 kubectl patch agent server-agent -n test --type=merge -p '
 spec:
-  serverConfig:
-    suspend: false
+  suspend: false
 '
 
 # Verify the deployment scales back up
@@ -572,14 +568,13 @@ Or override in a specific agent's config (agent-level config overrides template 
 Edit `agent-server.yaml` to change PVC sizes:
 
 ```yaml
-serverConfig:
-  port: 4096
-  persistence:
-    sessions:
-      size: "2Gi"              # Increase session storage
-      storageClassName: "gp3"  # Use a specific StorageClass
-    workspace:
-      size: "20Gi"             # Increase workspace storage
+port: 4096
+persistence:
+  sessions:
+    size: "2Gi"              # Increase session storage
+    storageClassName: "gp3"  # Use a specific StorageClass
+  workspace:
+    size: "20Gi"             # Increase workspace storage
 ```
 
 > **Note:** On Kind clusters, the default StorageClass (`standard`) is used. PVC resizing may not be supported depending on the provisioner.
@@ -646,7 +641,7 @@ If you see `ErrImagePull` or `ImagePullBackOff`, ensure:
 
 1. Images are loaded into Kind: `docker exec kubeopencode-control-plane crictl images | grep kubeopencode`
 2. `imagePullPolicy` is set to `Never` in Helm values
-3. **Server mode:** The `attach` image (`kubeopencode-agent-attach`) must be loaded. This image is used by Server mode Task Pods to connect to the OpenCode server. Build and load it with:
+3. **Agent tasks:** The `attach` image (`kubeopencode-agent-attach`) must be loaded. This image is used by `agentRef` Task Pods to connect to the Agent's OpenCode server. Build and load it with:
    ```bash
    make agent-build AGENT=attach
    kind load docker-image quay.io/kubeopencode/kubeopencode-agent-attach:latest --name kubeopencode

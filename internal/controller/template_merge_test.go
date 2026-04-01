@@ -249,14 +249,16 @@ func TestMergeAgentWithTemplate(t *testing.T) {
 			},
 		},
 		{
-			name: "serverConfig is agent-only (not inherited from template)",
+			name: "port, persistence, and suspend are agent-only (not inherited from template)",
 			agent: &kubeopenv1alpha1.Agent{
 				Spec: kubeopenv1alpha1.AgentSpec{
 					WorkspaceDir:       "/workspace",
 					ServiceAccountName: "sa",
-					ServerConfig: &kubeopenv1alpha1.ServerConfig{
-						Port: 9090,
+					Port:               9090,
+					Persistence: &kubeopenv1alpha1.PersistenceConfig{
+						Workspace: &kubeopenv1alpha1.VolumePersistence{Size: "10Gi"},
 					},
+					Suspend: true,
 				},
 			},
 			template: &kubeopenv1alpha1.AgentTemplate{
@@ -266,8 +268,14 @@ func TestMergeAgentWithTemplate(t *testing.T) {
 				},
 			},
 			check: func(t *testing.T, cfg agentConfig) {
-				if cfg.serverConfig == nil || cfg.serverConfig.Port != 9090 {
-					t.Errorf("expected agent serverConfig with port 9090, got %v", cfg.serverConfig)
+				if cfg.port != 9090 {
+					t.Errorf("expected agent port 9090, got %d", cfg.port)
+				}
+				if cfg.persistence == nil || cfg.persistence.Workspace == nil || cfg.persistence.Workspace.Size != "10Gi" {
+					t.Errorf("expected agent persistence with Workspace.Size=10Gi, got %v", cfg.persistence)
+				}
+				if !cfg.suspend {
+					t.Errorf("expected agent suspend=true, got false")
 				}
 			},
 		},
@@ -361,5 +369,121 @@ func TestMergeWithEmptyTemplateMatchesResolveConfig(t *testing.T) {
 	}
 	if merged.serviceAccountName != direct.serviceAccountName {
 		t.Errorf("serviceAccountName mismatch: merged=%s direct=%s", merged.serviceAccountName, direct.serviceAccountName)
+	}
+}
+
+func TestResolveTemplateToConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		template *kubeopenv1alpha1.AgentTemplate
+		check    func(t *testing.T, cfg agentConfig)
+	}{
+		{
+			name: "all fields populated from template",
+			template: &kubeopenv1alpha1.AgentTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: "full-template", Namespace: "default"},
+				Spec: kubeopenv1alpha1.AgentTemplateSpec{
+					AgentImage:         "custom-agent:v1",
+					ExecutorImage:      "custom-executor:v1",
+					AttachImage:        "custom-attach:v1",
+					WorkspaceDir:       "/tmpl-workspace",
+					ServiceAccountName: "tmpl-sa",
+					Command:            []string{"sh", "-c", "run"},
+					Config:             strPtr(`{"model":"gpt-4"}`),
+					MaxConcurrentTasks: int32Ptr(5),
+					Quota: &kubeopenv1alpha1.QuotaConfig{
+						MaxTaskStarts: 100,
+						WindowSeconds: 3600,
+					},
+					Contexts: []kubeopenv1alpha1.ContextItem{
+						{Name: "ctx1", Type: kubeopenv1alpha1.ContextTypeText, Text: "hello"},
+					},
+					Credentials: []kubeopenv1alpha1.Credential{
+						{Name: "cred1", SecretRef: kubeopenv1alpha1.SecretReference{Name: "secret1"}},
+					},
+					ImagePullSecrets: []corev1.LocalObjectReference{
+						{Name: "pull-secret"},
+					},
+				},
+			},
+			check: func(t *testing.T, cfg agentConfig) {
+				if cfg.agentImage != "custom-agent:v1" {
+					t.Errorf("expected agentImage=custom-agent:v1, got %s", cfg.agentImage)
+				}
+				if cfg.executorImage != "custom-executor:v1" {
+					t.Errorf("expected executorImage=custom-executor:v1, got %s", cfg.executorImage)
+				}
+				if cfg.attachImage != "custom-attach:v1" {
+					t.Errorf("expected attachImage=custom-attach:v1, got %s", cfg.attachImage)
+				}
+				if cfg.workspaceDir != "/tmpl-workspace" {
+					t.Errorf("expected workspaceDir=/tmpl-workspace, got %s", cfg.workspaceDir)
+				}
+				if cfg.serviceAccountName != "tmpl-sa" {
+					t.Errorf("expected serviceAccountName=tmpl-sa, got %s", cfg.serviceAccountName)
+				}
+				if len(cfg.command) != 3 || cfg.command[0] != "sh" {
+					t.Errorf("expected command [sh -c run], got %v", cfg.command)
+				}
+				if cfg.config == nil || *cfg.config != `{"model":"gpt-4"}` {
+					t.Errorf("expected config from template, got %v", cfg.config)
+				}
+				// maxConcurrentTasks and quota are intentionally NOT populated
+				// for templateRef tasks (no persistent Agent to enforce limits)
+				if cfg.maxConcurrentTasks != nil {
+					t.Errorf("expected maxConcurrentTasks=nil for template config, got %v", cfg.maxConcurrentTasks)
+				}
+				if cfg.quota != nil {
+					t.Errorf("expected quota=nil for template config, got %v", cfg.quota)
+				}
+				if len(cfg.contexts) != 1 || cfg.contexts[0].Name != "ctx1" {
+					t.Errorf("expected contexts from template, got %v", cfg.contexts)
+				}
+				if len(cfg.credentials) != 1 || cfg.credentials[0].Name != "cred1" {
+					t.Errorf("expected credentials from template, got %v", cfg.credentials)
+				}
+				if len(cfg.imagePullSecrets) != 1 || cfg.imagePullSecrets[0].Name != "pull-secret" {
+					t.Errorf("expected imagePullSecrets from template, got %v", cfg.imagePullSecrets)
+				}
+				// port, persistence, suspend are not set from template
+				if cfg.port != 0 {
+					t.Errorf("expected port=0 (not applicable for template), got %d", cfg.port)
+				}
+				if cfg.persistence != nil {
+					t.Errorf("expected persistence=nil (not applicable for template), got %v", cfg.persistence)
+				}
+				if cfg.suspend {
+					t.Errorf("expected suspend=false (not applicable for template), got true")
+				}
+			},
+		},
+		{
+			name: "empty template uses image defaults",
+			template: &kubeopenv1alpha1.AgentTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: "empty-template", Namespace: "default"},
+				Spec:       kubeopenv1alpha1.AgentTemplateSpec{},
+			},
+			check: func(t *testing.T, cfg agentConfig) {
+				if cfg.agentImage != DefaultAgentImage {
+					t.Errorf("expected default agent image %s, got %s", DefaultAgentImage, cfg.agentImage)
+				}
+				if cfg.executorImage != DefaultExecutorImage {
+					t.Errorf("expected default executor image %s, got %s", DefaultExecutorImage, cfg.executorImage)
+				}
+				if cfg.attachImage != DefaultAttachImage {
+					t.Errorf("expected default attach image %s, got %s", DefaultAttachImage, cfg.attachImage)
+				}
+				if cfg.workspaceDir != "" {
+					t.Errorf("expected empty workspaceDir, got %s", cfg.workspaceDir)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := ResolveTemplateToConfig(tt.template)
+			tt.check(t, cfg)
+		})
 	}
 }

@@ -85,24 +85,22 @@ func ServerWorkspacePVCName(agentName string) string {
 // BuildServerWorkspacePVC creates a PersistentVolumeClaim for workspace persistence.
 // Returns (nil, nil) if workspace persistence is not configured.
 func BuildServerWorkspacePVC(agent *kubeopenv1alpha1.Agent) (*corev1.PersistentVolumeClaim, error) {
-	if agent.Spec.ServerConfig == nil ||
-		agent.Spec.ServerConfig.Persistence == nil ||
-		agent.Spec.ServerConfig.Persistence.Workspace == nil {
+	if agent.Spec.Persistence == nil ||
+		agent.Spec.Persistence.Workspace == nil {
 		return nil, nil
 	}
-	return buildServerPVC(agent, agent.Spec.ServerConfig.Persistence.Workspace,
+	return buildServerPVC(agent, agent.Spec.Persistence.Workspace,
 		ServerWorkspacePVCName(agent.Name), DefaultWorkspacePVCSize, "workspace")
 }
 
 // BuildServerSessionPVC creates a PersistentVolumeClaim for session data persistence.
 // Returns (nil, nil) if session persistence is not configured.
 func BuildServerSessionPVC(agent *kubeopenv1alpha1.Agent) (*corev1.PersistentVolumeClaim, error) {
-	if agent.Spec.ServerConfig == nil ||
-		agent.Spec.ServerConfig.Persistence == nil ||
-		agent.Spec.ServerConfig.Persistence.Sessions == nil {
+	if agent.Spec.Persistence == nil ||
+		agent.Spec.Persistence.Sessions == nil {
 		return nil, nil
 	}
-	return buildServerPVC(agent, agent.Spec.ServerConfig.Persistence.Sessions,
+	return buildServerPVC(agent, agent.Spec.Persistence.Sessions,
 		ServerSessionPVCName(agent.Name), DefaultSessionPVCSize, "session")
 }
 
@@ -154,16 +152,11 @@ func getServerLabels(agentName string) map[string]string {
 	}
 }
 
-// BuildServerDeployment creates a Deployment for a Server-mode Agent.
+// BuildServerDeployment creates a Deployment for an Agent.
 // The Deployment runs OpenCode in serve mode with a single replica.
 // Context parameters (contextConfigMap, fileMounts, dirMounts, gitMounts) enable
-// Agent-level contexts to be loaded via init containers, matching Pod mode behavior.
+// Agent-level contexts to be loaded via init containers.
 func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, sysCfg systemConfig, contextConfigMap *corev1.ConfigMap, ctxFileMounts []fileMount, ctxDirMounts []dirMount, ctxGitMounts []gitMount) *appsv1.Deployment {
-	serverConfig := agent.Spec.ServerConfig
-	if serverConfig == nil {
-		return nil
-	}
-
 	port := GetServerPort(agent)
 
 	// Build labels for selector and pod template
@@ -212,7 +205,7 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 	workspaceVolumeSource := corev1.VolumeSource{
 		EmptyDir: &corev1.EmptyDirVolumeSource{},
 	}
-	if serverConfig.Persistence != nil && serverConfig.Persistence.Workspace != nil {
+	if agent.Spec.Persistence != nil && agent.Spec.Persistence.Workspace != nil {
 		workspaceVolumeSource = corev1.VolumeSource{
 			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 				ClaimName: ServerWorkspacePVCName(agent.Name),
@@ -234,7 +227,7 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 	}
 
 	// Add session persistence volume and env var if configured
-	if serverConfig.Persistence != nil && serverConfig.Persistence.Sessions != nil {
+	if agent.Spec.Persistence != nil && agent.Spec.Persistence.Sessions != nil {
 		volumes = append(volumes, corev1.Volume{
 			Name: ServerSessionVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -263,7 +256,7 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 	var initContainers []corev1.Container
 	initContainers = append(initContainers, buildOpenCodeInitContainer(agentCfg.agentImage))
 
-	// Add context init containers and volumes (matching Pod mode behavior)
+	// Add context init containers and volumes
 	var contextInitMounts []corev1.VolumeMount
 
 	// Add context ConfigMap volume if it exists
@@ -323,7 +316,7 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 			})
 		}
 
-		// Handle files outside workspace (same logic as Pod mode)
+		// Handle files outside workspace
 		externalDirs := make(map[string]bool)
 		for _, fm := range ctxFileMounts {
 			if !isUnderPath(fm.filePath, agentCfg.workspaceDir) {
@@ -597,13 +590,8 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 	}
 }
 
-// BuildServerService creates a Service for a Server-mode Agent.
+// BuildServerService creates a Service for an Agent.
 func BuildServerService(agent *kubeopenv1alpha1.Agent) *corev1.Service {
-	serverConfig := agent.Spec.ServerConfig
-	if serverConfig == nil {
-		return nil
-	}
-
 	port := GetServerPort(agent)
 
 	labels := getServerLabels(agent.Name)
@@ -631,15 +619,10 @@ func BuildServerService(agent *kubeopenv1alpha1.Agent) *corev1.Service {
 	}
 }
 
-// IsServerMode returns true if the Agent is configured for Server mode.
-func IsServerMode(agent *kubeopenv1alpha1.Agent) bool {
-	return agent.Spec.ServerConfig != nil
-}
-
 // GetServerPort returns the configured port or default.
 func GetServerPort(agent *kubeopenv1alpha1.Agent) int32 {
-	if agent.Spec.ServerConfig != nil && agent.Spec.ServerConfig.Port != 0 {
-		return agent.Spec.ServerConfig.Port
+	if agent.Spec.Port != 0 {
+		return agent.Spec.Port
 	}
 	return DefaultServerPort
 }

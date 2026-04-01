@@ -1,6 +1,9 @@
 # VS Code
 .vscode/
 
+# Playwright MCP
+.playwright-mcp/
+
 # MacOS
 .DS_Store
 

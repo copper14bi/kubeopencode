@@ -20,9 +20,9 @@ KubeOpenCode brings Agentic AI capabilities into the Kubernetes ecosystem. By le
 
 ### Core Goals
 
-- Use Kubernetes CRDs to define Task resources
+- Use Kubernetes CRDs to define Task and Agent resources
 - Use Controller pattern to manage resource lifecycle
-- Execute tasks as Kubernetes Pods
+- Agents run as persistent Deployments; Tasks execute via lightweight attach Pods or ephemeral template Pods
 - Seamless integration with Kubernetes ecosystem
 
 ### Key Advantages
@@ -54,7 +54,8 @@ See the [kubeopencode/dogfooding](https://github.com/kubeopencode/dogfooding) re
 | Resource | Purpose | Stability |
 |----------|---------|-----------|
 | **Task** | Single task execution (primary API) | Stable - semantic name |
-| **Agent** | AI agent configuration (HOW to execute) | Stable - independent of project name |
+| **Agent** | Running AI agent instance (Deployment + Service) | Stable - independent of project name |
+| **AgentTemplate** | Reusable blueprint for Agents and ephemeral Tasks | Stable - configuration inheritance |
 | **KubeOpenCodeConfig** | Cluster-scoped system-level configuration | Stable - system settings |
 | **ContextItem** | Inline context for AI agents (KNOW) | Stable - inline context only |
 
@@ -111,9 +112,10 @@ kind: Agent
 ```
 Task (single task execution)
 ├── TaskSpec
-│   ├── description: *string         (syntactic sugar for /workspace/task.md)
-│   ├── contexts: []ContextItem      (inline context definitions)
-│   └── agentRef: *AgentReference    (Agent reference, same namespace)
+│   ├── description: *string                (syntactic sugar for /workspace/task.md)
+│   ├── contexts: []ContextItem             (inline context definitions)
+│   ├── agentRef: *AgentReference           (Agent reference, same namespace)
+│   └── templateRef: *AgentTemplateReference (AgentTemplate reference, alternative to agentRef)
 └── TaskExecutionStatus
     ├── phase: TaskPhase
     ├── podName: string
@@ -121,13 +123,17 @@ Task (single task execution)
     ├── completionTime: Time
     └── conditions: []Condition
 
-Agent (execution configuration)
+Agent (running AI agent instance — always creates Deployment + Service)
 └── AgentSpec
     ├── profile: string             (brief human-readable summary, for documentation/discovery)
     ├── agentImage: string           (OpenCode init container image)
     ├── executorImage: string        (Main worker container image)
+    ├── attachImage: string          (lightweight image for --attach Pods)
     ├── workspaceDir: string         (default: "/workspace")
     ├── command: []string
+    ├── port: int32                  (OpenCode server port, default: 4096)
+    ├── persistence: *PersistenceConfig  (session/workspace PVCs)
+    ├── suspend: bool                (scale Deployment to 0 replicas)
     ├── contexts: []ContextItem      (inline context definitions)
     ├── credentials: []Credential
     ├── caBundle: *CABundleConfig    (custom CA certificates for TLS)
@@ -142,6 +148,11 @@ Agent (execution configuration)
     └── quota: *QuotaConfig          (rate limiting for Task starts)
         ├── maxTaskStarts: int32     (max starts within window)
         └── windowSeconds: int32     (sliding window duration in seconds)
+
+AgentTemplate (reusable blueprint for Agents and ephemeral Tasks)
+└── AgentTemplateSpec
+    ├── (shares most fields with AgentSpec, except profile/port/persistence/suspend)
+    └── (see AgentTemplate section below for full spec)
 
 KubeOpenCodeConfig (system configuration)
 └── KubeOpenCodeConfigSpec
@@ -167,9 +178,11 @@ type Task struct {
 }
 
 type TaskSpec struct {
-    Description *string          // Syntactic sugar for /workspace/task.md
-    Contexts    []ContextItem    // Inline context definitions
-    AgentRef    *AgentReference  // Agent reference (same namespace)
+    Description *string                 // Syntactic sugar for /workspace/task.md
+    Contexts    []ContextItem           // Inline context definitions
+    AgentRef    *AgentReference         // Agent reference (same namespace)
+    TemplateRef *AgentTemplateReference // AgentTemplate reference (alternative to agentRef)
+    // Exactly one of AgentRef or TemplateRef must be set
 }
 
 // AgentReference references an Agent in the same namespace
@@ -236,8 +249,12 @@ type AgentSpec struct {
     Profile            string                      // Brief human-readable summary of Agent's purpose (optional, for documentation/discovery)
     AgentImage         string                      // OpenCode init container image (copies binary to /tools)
     ExecutorImage      string                      // Main worker container image (runs tasks)
+    AttachImage        string                      // Lightweight image for --attach Pods (~25MB)
     WorkspaceDir       string                      // Working directory (default: "/workspace")
     Command            []string                    // Custom entrypoint command
+    Port               int32                       // OpenCode server port (default: 4096)
+    Persistence        *PersistenceConfig           // Session/workspace PVC configuration
+    Suspend            bool                        // Scale Deployment to 0 replicas
     Contexts           []ContextItem               // Inline context definitions
     Credentials        []Credential
     CABundle           *CABundleConfig              // Custom CA certificates for private HTTPS/Git servers
@@ -373,8 +390,9 @@ spec:
         name: security-policy
       # Empty mountPath = write to .kubeopencode/context.md with XML tags
 
-  # Required: Reference to Agent
-  agentRef: my-agent
+  # Required: Reference to Agent or AgentTemplate (exactly one)
+  agentRef:
+    name: my-agent
 
 status:
   # Execution phase
@@ -394,7 +412,8 @@ status:
 |-------|------|----------|-------------|
 | `spec.description` | String | No | Task instruction (creates /workspace/task.md) |
 | `spec.contexts` | []ContextItem | No | Inline context definitions (see below) |
-| `spec.agentRef` | *AgentReference | Yes | Agent reference, must be in the same namespace (required) |
+| `spec.agentRef` | *AgentReference | No | Agent reference, same namespace. Exactly one of `agentRef` or `templateRef` must be set. |
+| `spec.templateRef` | *AgentTemplateReference | No | AgentTemplate reference for ephemeral execution. Exactly one of `agentRef` or `templateRef` must be set. |
 
 **Status Field Description:**
 
@@ -490,13 +509,13 @@ Contexts provide additional information to AI agents during task execution. They
 2. Task.contexts (array order)
 3. Task.description (becomes /workspace/task.md)
 
-### Agent (Execution Configuration)
+### Agent (Running AI Agent Instance)
 
-Agent defines the AI agent configuration for task execution.
+Agent defines a running AI agent. Creating an Agent always results in a Deployment + Service running an OpenCode server. Tasks reference Agents via `agentRef` and execute on the persistent server.
 
-KubeOpenCode uses a **two-container pattern**:
+KubeOpenCode uses a **two-container pattern** for the Agent's Deployment:
 1. **Init Container** (OpenCode image): Copies OpenCode binary to `/tools` shared volume
-2. **Worker Container** (Executor image): Uses `/tools/opencode` to run AI tasks
+2. **Worker Container** (Executor image): Runs the OpenCode server using `/tools/opencode serve`
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -584,9 +603,15 @@ spec:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `spec.agentImage` | String | No | OpenCode init container image (copies binary to /tools) |
-| `spec.executorImage` | String | No | Main worker container image (runs tasks) |
+| `spec.executorImage` | String | No | Main worker container image (runs the server) |
+| `spec.attachImage` | String | No | Lightweight image for --attach Pods (~25MB) |
 | `spec.workspaceDir` | String | No | Working directory (default: "/workspace") |
 | `spec.command` | []String | No | Custom entrypoint command |
+| `spec.port` | int32 | No | OpenCode server port (default: 4096) |
+| `spec.persistence` | *PersistenceConfig | No | Persistent storage for sessions and workspace |
+| `spec.persistence.sessions` | *VolumePersistence | No | Session data PVC (SQLite DB) |
+| `spec.persistence.workspace` | *VolumePersistence | No | Workspace directory PVC |
+| `spec.suspend` | bool | No | Scale Deployment to 0 replicas (default: false) |
 | `spec.contexts` | []ContextItem | No | Inline contexts (applied to all tasks) |
 | `spec.credentials` | []Credential | No | Secrets as env vars or file mounts |
 | `spec.caBundle` | *CABundleConfig | No | Custom CA certificates for private HTTPS/Git servers |
@@ -624,11 +649,12 @@ When this annotation is detected:
 
 ---
 
-## AgentTemplate (Reusable Agent Configuration)
+## AgentTemplate (Reusable Blueprint)
 
-AgentTemplate defines a reusable base configuration for Agents. It allows teams to maintain
-shared settings (images, contexts, credentials, server config) in one place, while individual
-users create lightweight Agents that reference the template.
+AgentTemplate serves two roles:
+
+1. **Base configuration for Agents**: Teams maintain shared settings (images, contexts, credentials) in one template. Individual Agents reference it via `templateRef`.
+2. **Blueprint for ephemeral Tasks**: Tasks can reference a template directly via `templateRef` to run one-off Pods without a persistent Agent.
 
 ### AgentTemplateSpec Fields
 
@@ -636,7 +662,7 @@ users create lightweight Agents that reference the template.
 |-------|------|----------|-------------|
 | `agentImage` | string | No | OpenCode init container image |
 | `executorImage` | string | No | Worker container image |
-| `attachImage` | string | No | Server-mode attach image |
+| `attachImage` | string | No | Lightweight image for agentRef task Pods |
 | `workspaceDir` | string | Yes | Working directory inside container |
 | `command` | []string | No | Entrypoint command override |
 | `contexts` | []ContextItem | No | Default contexts |
@@ -656,7 +682,7 @@ When an Agent references a template via `spec.templateRef`, fields are merged:
 
 - **Scalar/pointer fields**: Agent value wins if non-zero/non-nil; otherwise template value is used
 - **List fields** (contexts, credentials, imagePullSecrets): Agent **replaces** the template list entirely if specified (not appended)
-- **Agent-only fields** (profile, serverConfig): Always from Agent (not in template)
+- **Agent-only fields** (profile, port, persistence, suspend): Always from Agent (not in template)
 
 ### Tracking
 
@@ -701,32 +727,29 @@ spec:
 apiVersion: kubeopencode.io/v1alpha1
 kind: Agent
 metadata:
-  name: alice-pod-agent
+  name: alice-agent
   namespace: engineering
 spec:
   templateRef:
     name: team-python-dev
-  profile: "Alice's Pod-mode agent for batch tasks"
+  profile: "Alice's development agent with persistence"
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
-  maxConcurrentTasks: 10         # Override: higher concurrency for batch work
+  maxConcurrentTasks: 10         # Override: higher concurrency
+  persistence:
+    sessions:
+      size: "2Gi"
 ---
+# Ephemeral task using the template directly (no Agent needed)
 apiVersion: kubeopencode.io/v1alpha1
-kind: Agent
+kind: Task
 metadata:
-  name: alice-server-agent
+  name: batch-lint
   namespace: engineering
 spec:
   templateRef:
     name: team-python-dev
-  profile: "Alice's Server-mode agent for interactive sessions"
-  workspaceDir: /workspace
-  serviceAccountName: kubeopencode-agent
-  serverConfig:
-    port: 4096
-    persistence:
-      sessions:
-        size: "2Gi"
+  description: "Run linting on all Python files"
 ```
 
 ---
@@ -735,17 +758,22 @@ spec:
 
 ### Agent Image Discovery
 
-KubeOpenCode uses a **two-container pattern** for AI task execution:
+KubeOpenCode uses a **two-container pattern** for the Agent's Deployment:
 
 1. **Init Container** (`agentImage`): Copies OpenCode binary to `/tools` shared volume
-2. **Worker Container** (`executorImage`): Uses `/tools/opencode` to run AI tasks
+2. **Worker Container** (`executorImage`): Runs the OpenCode server using `/tools/opencode serve`
+
+Tasks referencing an Agent via `agentRef` create lightweight Pods using the `attachImage` (~25MB) that connect to the Agent's server via `opencode run --attach <url>`.
+
+Tasks referencing an AgentTemplate via `templateRef` create standalone Pods using the `executorImage` with the full development environment.
 
 ### Image Resolution
 
 | Field | Container | Default |
 |-------|-----------|---------|
 | `agentImage` | Init Container (OpenCode) | `quay.io/kubeopencode/kubeopencode-agent-opencode:latest` |
-| `executorImage` | Worker Container | `quay.io/kubeopencode/kubeopencode-agent-devbox:latest` |
+| `executorImage` | Worker Container (Server) | `quay.io/kubeopencode/kubeopencode-agent-devbox:latest` |
+| `attachImage` | Task Pod (agentRef) | `quay.io/kubeopencode/kubeopencode-agent-attach:latest` |
 
 **Backward Compatibility:**
 - If only `agentImage` is set (legacy): it's used as the executor image, default OpenCode image is used for init container
@@ -753,16 +781,19 @@ KubeOpenCode uses a **two-container pattern** for AI task execution:
 
 ### How It Works
 
-The controller:
-1. Looks up the Agent referenced by `agentRef` (required)
-2. Resolves `agentImage` and `executorImage` with backward compatibility
-3. Generates a Pod with:
-   - `opencode-init` init container (copies OpenCode binary to `/tools`)
-   - Worker container with the executor image
-   - Labels for tracking (`kubeopencode.io/task`)
-   - Environment variables (`TASK_NAME`, `TASK_NAMESPACE`)
-   - Owner references for garbage collection
-   - ServiceAccount from Agent spec
+**Agent creation:**
+1. Agent controller creates a Deployment running `opencode serve` + a ClusterIP Service
+2. Status is updated with deployment name, service name, URL, and readiness
+
+**Task with `agentRef`:**
+1. Task controller finds the Agent and gets its server URL
+2. Creates a lightweight Pod using `attachImage` with command: `opencode run --attach <url> "task"`
+3. Pod connects to the Agent's server, executes the task, and terminates
+
+**Task with `templateRef`:**
+1. Task controller finds the AgentTemplate and builds configuration from it
+2. Creates a standalone Pod using `executorImage` with command: `opencode run "task"`
+3. Pod runs independently with the full development environment and terminates when done
 
 ### Concurrency Control
 
@@ -859,16 +890,9 @@ status:
 
 Records are automatically pruned when they fall outside the sliding window.
 
-### Server Mode (Persistent OpenCode Server)
+### Persistence and Suspend
 
-Agents support two execution modes:
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Pod mode** (default) | Creates a new Pod for each Task | Standard task execution |
-| **Server mode** | Runs a persistent OpenCode server (Deployment + Service) | Long-running agents, shared context |
-
-Server mode is enabled by adding `serverConfig` to the Agent spec:
+Agents support persistent storage and suspend/resume:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -881,55 +905,59 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
+  port: 4096                    # OpenCode server port (default: 4096)
+  persistence:
+    sessions:
+      size: "2Gi"
+    workspace:
+      size: "10Gi"
 
-  # Presence of serverConfig enables Server mode
-  serverConfig:
-    port: 4096                    # OpenCode server port (default: 4096)
-
-  # Resource requirements (applies to both Pod and Server modes)
+  # Resource requirements
   podSpec:
     resources:
       requests:
         memory: "512Mi"
         cpu: "500m"
 
-  # Concurrency and quota limits apply equally to Server mode
   maxConcurrentTasks: 10
 ```
 
-**How Server Mode Works:**
+**Agent Lifecycle:**
 
 ```
-Agent Created (with serverConfig)
+Agent Created
     │
     ▼
 Agent Controller
     ├── Creates Deployment (opencode serve)
     └── Creates Service (ClusterIP)
 
-Task Created (referencing Server-mode Agent)
+Task Created (with agentRef)
     │
     ▼
 Task Controller
     ├── Creates Pod with command: opencode run --attach <server-url> "task"
-    ├── Standard Pod status tracking (same as Pod mode)
+    ├── Standard Pod status tracking
     └── Logs available via kubectl logs
+
+Task Created (with templateRef)
+    │
+    ▼
+Task Controller
+    ├── Creates standalone Pod with command: opencode run "task"
+    ├── Uses template config (images, workspace, credentials)
+    └── Pod terminates when done
 ```
 
-**ServerConfig Fields:**
+**Persistence Fields:**
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `port` | int32 | 4096 | Port for OpenCode server |
-| `persistence` | PersistenceConfig | nil | Persistent storage configuration |
-| `suspend` | bool | false | Scale deployment to 0 replicas (suspend/resume) |
-
-**PersistenceConfig Fields:**
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `sessions` | VolumePersistence | nil | Session data (SQLite DB) persistence |
-| `workspace` | VolumePersistence | nil | Workspace directory persistence (git repos, modified files) |
+| `spec.port` | int32 | 4096 | Port for OpenCode server |
+| `spec.persistence` | PersistenceConfig | nil | Persistent storage configuration |
+| `spec.persistence.sessions` | VolumePersistence | nil | Session data (SQLite DB) persistence |
+| `spec.persistence.workspace` | VolumePersistence | nil | Workspace directory persistence |
+| `spec.suspend` | bool | false | Scale deployment to 0 replicas (suspend/resume) |
 
 **VolumePersistence Fields:**
 
@@ -938,17 +966,15 @@ Task Controller
 | `storageClassName` | *string | cluster default | StorageClass for the PVC |
 | `size` | string | 1Gi | PVC storage size |
 
-**Server Mode Status:**
-
-When an Agent is in Server mode, its status includes:
+**Agent Status:**
 
 ```yaml
 status:
-  serverStatus:
-    deploymentName: slack-agent-server
-    serviceName: slack-agent
-    url: http://slack-agent.platform-agents.svc.cluster.local:4096
-    ready: true
+  deploymentName: slack-agent-server
+  serviceName: slack-agent
+  url: http://slack-agent.platform-agents.svc.cluster.local:4096
+  ready: true
+  suspended: false
   conditions:
     - type: ServerReady
       status: "True"
@@ -957,19 +983,6 @@ status:
       status: "True"
       reason: DeploymentHealthy
 ```
-
-**Key Differences:**
-
-| Aspect | Pod Mode | Server Mode |
-|--------|----------|-------------|
-| Lifecycle | Ephemeral Pod per Task | Persistent Deployment + Pod per Task |
-| Command | `opencode run "task"` | `opencode run --attach <url> "task"` |
-| Cold start | Yes | No (server already running) |
-| Context sharing | None | Shared across Tasks via server |
-| Logs | `kubectl logs <pod>` | `kubectl logs <pod>` (same) |
-| Task API | Same | Same |
-
-**Task API Unchanged**: Tasks referencing Server-mode Agents use the same API as Pod-mode. The execution mode is an Agent-level configuration, transparent to Task authors.
 
 ---
 
@@ -1041,10 +1054,10 @@ Cleanup is disabled by default. When `KubeOpenCodeConfig` is not present or `cle
 
 ## Complete Examples
 
-### 1. Simple Task Execution
+### 1. Simple Task Execution (Agent)
 
 ```yaml
-# Create Agent
+# Create Agent (creates Deployment + Service)
 apiVersion: kubeopencode.io/v1alpha1
 kind: Agent
 metadata:
@@ -1052,22 +1065,20 @@ metadata:
   namespace: kubeopencode-system
 spec:
   profile: "Default development agent for general tasks"
-  # OpenCode init container (optional, uses default if not specified)
   agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
-  # Executor image (worker container)
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
-  # Command uses OpenCode from /tools (injected by init container)
-  command: ["sh", "-c", "/tools/opencode run --format json \"$(cat /workspace/task.md)\""]
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
 ---
-# Create Task
+# Create Task (runs on the Agent's server via --attach)
 apiVersion: kubeopencode.io/v1alpha1
 kind: Task
 metadata:
   name: update-service-a
   namespace: kubeopencode-system
 spec:
+  agentRef:
+    name: default
   description: |
     Update dependencies to latest versions.
     Run tests and create PR.
@@ -1259,8 +1270,9 @@ kubectl port-forward -n kubeopencode-system svc/kubeopencode-server 2746:2746
 ## Summary
 
 **API**:
-- **Task** - primary API for single task execution
-- **Agent** - stable, project-independent configuration
+- **Task** - primary API for single task execution (supports both `agentRef` and `templateRef`)
+- **Agent** - running AI agent instance (always creates Deployment + Service)
+- **AgentTemplate** - reusable blueprint for Agents and ephemeral Tasks
 - **KubeOpenCodeConfig** - system-level settings (systemImage, cleanup)
 
 **Context Types** (via ContextItem):

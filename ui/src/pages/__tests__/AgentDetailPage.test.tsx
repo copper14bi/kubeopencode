@@ -30,17 +30,8 @@ describe('AgentDetailPage', () => {
     });
   });
 
-  it('shows mode in configuration for Pod agent', async () => {
+  it('shows live status badge for agents', async () => {
     renderAgentDetailPage('default', 'opencode-agent');
-
-    await waitFor(() => {
-      expect(screen.getByText('Mode')).toBeInTheDocument();
-      expect(screen.getByText('Pod')).toBeInTheDocument();
-    });
-  });
-
-  it('shows live status badge for server agents', async () => {
-    renderAgentDetailPage('test', 'server-agent');
 
     await waitFor(() => {
       expect(screen.getByText('Live')).toBeInTheDocument();
@@ -115,13 +106,13 @@ describe('AgentDetailPage', () => {
     });
   });
 
-  it('shows server status for server mode agents', async () => {
-    renderAgentDetailPage('test', 'server-agent');
+  it('shows server status for all agents', async () => {
+    renderAgentDetailPage('default', 'opencode-agent');
 
     await waitFor(() => {
       expect(screen.getByText('Server Status')).toBeInTheDocument();
-      expect(screen.getByText('server-agent-server')).toBeInTheDocument();
-      expect(screen.getByText('http://server-agent.test.svc.cluster.local:4096')).toBeInTheDocument();
+      expect(screen.getByText('opencode-agent-server')).toBeInTheDocument();
+      expect(screen.getByText('http://opencode-agent.default.svc.cluster.local:4096')).toBeInTheDocument();
     });
   });
 

@@ -79,13 +79,13 @@ describe('DashboardPage', () => {
     });
   });
 
-  it('shows agent mode badges', async () => {
+  it('shows agent status badges', async () => {
     renderWithProviders(<DashboardPage />, { initialEntries: ['/'] });
 
     await waitFor(() => {
-      // At least one Pod and one Server badge should be present
-      const podBadges = screen.getAllByText('Pod');
-      expect(podBadges.length).toBeGreaterThan(0);
+      // All agents should have status badges (Live, Starting, or Suspended)
+      const liveBadges = screen.getAllByText('Live');
+      expect(liveBadges.length).toBeGreaterThan(0);
     });
   });
 

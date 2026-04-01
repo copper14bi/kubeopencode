@@ -1,29 +1,44 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import api from '../api/client';
+import api, { Agent } from '../api/client';
 import Labels from '../components/Labels';
 import Skeleton from '../components/Skeleton';
 import ResourceFilter from '../components/ResourceFilter';
+import MultiSelect from '../components/MultiSelect';
 import { useFilterState } from '../hooks/useFilterState';
 import { useNamespace } from '../contexts/NamespaceContext';
 import { LABEL_AGENT_TEMPLATE, FILTER_HAS_TEMPLATE, FILTER_NO_TEMPLATE, appendLabelSelector } from '../utils/labels';
 
 const PAGE_SIZE = 12;
 
+const STATUS_OPTIONS = [
+  { value: 'live', label: 'Live' },
+  { value: 'starting', label: 'Starting' },
+  { value: 'suspended', label: 'Suspended' },
+];
+
+function getAgentStatus(agent: Agent): string {
+  if (agent.serverStatus?.suspended) return 'suspended';
+  if (agent.serverStatus?.ready) return 'live';
+  return 'starting';
+}
+
 function AgentsPage() {
   const { namespace, isAllNamespaces } = useNamespace();
   const [currentPage, setCurrentPage] = useState(1);
   const [templateFilter, setTemplateFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [filters, setFilters] = useFilterState();
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [namespace, templateFilter, filters.name, filters.labelSelector]);
+  }, [namespace, templateFilter, statusFilter, filters.name, filters.labelSelector]);
 
-  // Reset template filter when namespace changes
+  // Reset filters when namespace changes
   useEffect(() => {
     setTemplateFilter('');
+    setStatusFilter([]);
   }, [namespace]);
 
   const { data: templatesData } = useQuery({
@@ -40,8 +55,8 @@ function AgentsPage() {
     [templatesData]
   );
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['agents', namespace, currentPage, templateFilter, filters.name, filters.labelSelector],
+  const { data: rawData, isLoading, error, refetch } = useQuery({
+    queryKey: ['agents', namespace, currentPage, templateFilter, statusFilter, filters.name, filters.labelSelector],
     queryFn: () => {
       let labelSelector = filters.labelSelector || '';
       if (templateFilter === FILTER_HAS_TEMPLATE) {
@@ -54,8 +69,8 @@ function AgentsPage() {
       const params = {
         name: filters.name || undefined,
         labelSelector: labelSelector || undefined,
-        limit: PAGE_SIZE,
-        offset: (currentPage - 1) * PAGE_SIZE,
+        limit: 200,
+        offset: 0,
         sortOrder: 'desc' as const,
       };
       return isAllNamespaces
@@ -63,6 +78,28 @@ function AgentsPage() {
         : api.listAgents(namespace, params);
     },
   });
+
+  // Client-side status filtering + pagination
+  const data = useMemo(() => {
+    if (!rawData) return rawData;
+    let agents = rawData.agents;
+    if (statusFilter.length > 0) {
+      agents = agents.filter((a) => statusFilter.includes(getAgentStatus(a)));
+    }
+    const totalCount = agents.length;
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end = Math.min(start + PAGE_SIZE, totalCount);
+    return {
+      agents: agents.slice(start, end),
+      total: totalCount,
+      pagination: {
+        limit: PAGE_SIZE,
+        offset: start,
+        totalCount,
+        hasMore: end < totalCount,
+      },
+    };
+  }, [rawData, statusFilter, currentPage]);
 
   return (
     <div className="animate-fade-in">
@@ -81,6 +118,12 @@ function AgentsPage() {
           onFilterChange={setFilters}
           placeholder="Filter agents by name..."
         >
+          <MultiSelect
+            options={STATUS_OPTIONS}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+            label="Status"
+          />
           {uniqueTemplateNames.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-stone-400 font-medium">Template:</span>
@@ -145,22 +188,20 @@ function AgentsPage() {
                       </h3>
                       <p className="text-xs text-stone-400 mt-0.5 font-mono">{agent.namespace}</p>
                     </div>
-                    {agent.mode === 'Server' && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border ${
-                        agent.serverStatus?.suspended
-                          ? 'bg-amber-50 text-amber-600 border-amber-200'
-                          : agent.serverStatus?.ready
-                            ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                            : 'bg-violet-50 text-violet-600 border-violet-200'
-                      }`}>
-                        {!agent.serverStatus?.suspended && (
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                          }`} />
-                        )}
-                        {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border ${
+                      agent.serverStatus?.suspended
+                        ? 'bg-amber-50 text-amber-600 border-amber-200'
+                        : agent.serverStatus?.ready
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          : 'bg-violet-50 text-violet-600 border-violet-200'
+                    }`}>
+                      {!agent.serverStatus?.suspended && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          agent.serverStatus?.ready ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                        }`} />
+                      )}
+                      {agent.serverStatus?.suspended ? 'Suspended' : agent.serverStatus?.ready ? 'Live' : 'Starting'}
+                    </span>
                   </div>
 
                   {agent.profile && (
@@ -168,10 +209,6 @@ function AgentsPage() {
                   )}
 
                   <div className="mt-4 space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-stone-400">Mode</span>
-                      <span className="text-stone-600 font-mono">{agent.mode}</span>
-                    </div>
                     {agent.templateRef && (
                       <div className="flex justify-between text-xs">
                         <span className="text-stone-400">Template</span>

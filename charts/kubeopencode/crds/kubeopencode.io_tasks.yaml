@@ -23,6 +23,10 @@ spec:
     - jsonPath: .status.agentRef.name
       name: Agent
       type: string
+    - jsonPath: .status.templateRef.name
+      name: Template
+      priority: 1
+      type: string
     - jsonPath: .status.podName
       name: Pod
       type: string
@@ -57,8 +61,11 @@ spec:
             description: Spec defines the desired state of Task
             properties:
               agentRef:
-                description: AgentRef references an Agent in the same namespace for
-                  this task.
+                description: |-
+                  AgentRef references a running Agent in the same namespace.
+                  The Task creates a lightweight Pod that connects to the Agent's server
+                  via `opencode run --attach`.
+                  Exactly one of agentRef or templateRef must be set.
                 properties:
                   name:
                     description: Name of the Agent.
@@ -72,7 +79,7 @@ spec:
                   Contexts are processed in array order, with later contexts taking precedence.
 
                   Context priority (lowest to highest):
-                    1. Agent.contexts (Agent-level defaults)
+                    1. Agent/Template contexts (defaults)
                     2. Task.contexts (Task-specific contexts)
                     3. Task.description (highest, becomes ${WORKSPACE_DIR}/task.md)
 
@@ -294,15 +301,32 @@ spec:
                   Example:
                     description: "Update all dependencies and create a PR"
                 type: string
-            required:
-            - agentRef
+              templateRef:
+                description: |-
+                  TemplateRef references an AgentTemplate in the same namespace.
+                  The Task creates an ephemeral Pod using the template's configuration.
+                  The Pod runs standalone `opencode run` and has the same lifecycle as the Task.
+                  Exactly one of agentRef or templateRef must be set.
+                properties:
+                  name:
+                    description: Name of the AgentTemplate.
+                    type: string
+                required:
+                - name
+                type: object
             type: object
+            x-kubernetes-validations:
+            - message: either agentRef or templateRef must be specified
+              rule: has(self.agentRef) || has(self.templateRef)
+            - message: only one of agentRef or templateRef can be specified
+              rule: '!(has(self.agentRef) && has(self.templateRef))'
           status:
             description: Status represents the current status of the Task
             properties:
               agentRef:
-                description: AgentRef is the resolved Agent reference used for this
-                  task.
+                description: |-
+                  AgentRef is the resolved Agent reference used for this task.
+                  Only set when the task was created with agentRef.
                 properties:
                   name:
                     description: Name of the Agent.
@@ -395,6 +419,17 @@ spec:
                 description: Start time
                 format: date-time
                 type: string
+              templateRef:
+                description: |-
+                  TemplateRef is the resolved AgentTemplate reference used for this task.
+                  Only set when the task was created with templateRef.
+                properties:
+                  name:
+                    description: Name of the AgentTemplate.
+                    type: string
+                required:
+                - name
+                type: object
             type: object
         required:
         - spec

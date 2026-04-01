@@ -54,23 +54,11 @@ The Web UI provides:
 - **Task Creation**: Create new Tasks with Agent selection
 - **Agent Browser**: View available Agents and their configurations
 
-## Choose Your Mode
+## Deploy a Live Agent (Recommended for Getting Started)
 
-KubeOpenCode supports two execution modes. Choose the one that fits your use case:
+Every Agent in KubeOpenCode is a persistent service — the controller always creates a Deployment + Service running `opencode serve`. Your team can interact with it anytime — through the web terminal, CLI, or by submitting Tasks programmatically.
 
-| | **Server Mode (Live Agent)** | **Pod Mode (Batch Tasks)** |
-|---|---|---|
-| **What** | Persistent AI agent running as a service | Ephemeral Pod per Task |
-| **Best for** | Interactive coding, team-shared agents, Slack bots | Batch operations, CI/CD pipelines, one-off tasks |
-| **Cold start** | None (server always running) | Yes (container startup per Task) |
-| **Context sharing** | Shared across Tasks via server | Isolated per Task |
-| **Interaction** | Web Terminal, CLI attach, API | Logs only |
-
-## Server Mode: Live Agent (Recommended for Getting Started)
-
-Server Mode deploys a persistent AI agent as a Kubernetes service. Your team can interact with it anytime — through the web terminal, CLI, or by submitting Tasks programmatically.
-
-### 1. Create a Server-Mode Agent
+### 1. Create an Agent
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -84,12 +72,11 @@ spec:
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
 
-  # Enable Server Mode — creates a persistent Deployment + Service
-  serverConfig:
-    port: 4096
-    persistence:
-      sessions:
-        size: "2Gi"   # Persist conversation history across restarts
+  # Optional: customize port and persistence
+  port: 4096
+  persistence:
+    sessions:
+      size: "2Gi"   # Persist conversation history across restarts
 
   credentials:
     - name: api-key
@@ -114,8 +101,8 @@ spec:
 # Watch the Agent status
 kubectl get agents -n kubeopencode-system -w
 
-# NAME        PROFILE                         MODE     STATUS
-# dev-agent   Interactive development agent    Server   Ready
+# NAME        PROFILE                         STATUS
+# dev-agent   Interactive development agent    Ready
 
 # Check the created resources
 kubectl get deploy,svc -n kubeopencode-system -l kubeopencode.io/agent=dev-agent
@@ -148,7 +135,7 @@ kubectl port-forward -n kubeopencode-system svc/kubeopencode-server 2746:2746
 
 **Option C: Submit Tasks programmatically**
 
-Even in Server Mode, you can submit Tasks. They run on the persistent server instead of creating new Pods:
+You can also submit Tasks programmatically. They run on the persistent agent:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -171,30 +158,25 @@ spec:
 kubectl logs -n kubeopencode-system deploy/dev-agent-server -f
 
 # Check server health
-kubectl get agent dev-agent -n kubeopencode-system -o jsonpath='{.status.serverStatus}'
+kubectl get agent dev-agent -n kubeopencode-system -o jsonpath='{.status.ready}'
 
 # Stop the agent (scales down the Deployment)
 kubectl delete agent dev-agent -n kubeopencode-system
 ```
 
-## Pod Mode: Batch Tasks
+## Ephemeral Tasks with AgentTemplate
 
-Pod Mode creates an ephemeral Pod for each Task — ideal for batch operations, CI/CD pipelines, and one-off tasks.
+For batch operations, CI/CD pipelines, and one-off tasks, use an **AgentTemplate** instead of a persistent Agent. Tasks referencing a `templateRef` run in an ephemeral Pod that is created and destroyed per task.
 
-### 1. Create an Agent
-
-KubeOpenCode uses a **two-container pattern**:
-- **Init Container** (`agentImage`): Copies OpenCode binary to `/tools` shared volume
-- **Worker Container** (`executorImage`): Runs tasks using `/tools/opencode`
+### 1. Create an AgentTemplate
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
-kind: Agent
+kind: AgentTemplate
 metadata:
   name: default
   namespace: kubeopencode-system
 spec:
-  profile: "Default development agent for general tasks"
   agentImage: quay.io/kubeopencode/kubeopencode-agent-opencode:latest
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
@@ -207,7 +189,7 @@ spec:
       env: OPENCODE_API_KEY
 ```
 
-### 2. Create a Task
+### 2. Create a Task with templateRef
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -216,6 +198,10 @@ metadata:
   name: update-service-a
   namespace: kubeopencode-system
 spec:
+  # Reference AgentTemplate for ephemeral execution
+  templateRef:
+    name: default
+
   # Task description (becomes /workspace/task.md)
   description: |
     Update dependencies to latest versions.
@@ -240,7 +226,7 @@ kubectl get tasks -n kubeopencode-system -w
 kubectl describe task update-service-a -n kubeopencode-system
 
 # View task logs
-kubectl logs $(kubectl get task update-service-a -o jsonpath='{.status.podName}') -n kubeopencode-system
+kubectl logs -n kubeopencode-system $(kubectl get task update-service-a -n kubeopencode-system -o jsonpath='{.status.podName}')
 ```
 
 ## Batch Operations with Helm

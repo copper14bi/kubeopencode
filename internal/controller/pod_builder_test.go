@@ -1698,7 +1698,7 @@ func TestBuildPod_WithoutContextFile(t *testing.T) {
 	}
 }
 
-func TestBuildPod_ServerMode_WithAttachCommand(t *testing.T) {
+func TestBuildPod_AgentRef_WithAttachCommand(t *testing.T) {
 	task := &kubeopenv1alpha1.Task{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-task",
@@ -1759,7 +1759,7 @@ func TestBuildPod_ServerMode_WithAttachCommand(t *testing.T) {
 	}
 }
 
-func TestBuildPod_PodMode_WithoutAttachCommand(t *testing.T) {
+func TestBuildPod_TemplateRef_WithoutAttachCommand(t *testing.T) {
 	task := &kubeopenv1alpha1.Task{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-task",

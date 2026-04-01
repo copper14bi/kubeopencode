@@ -1,18 +1,18 @@
 ---
 sidebar_position: 2
 title: Features
-description: Server Mode (live agents), context system, concurrency control, proxy, CA certificates, and more
+description: Live agents, context system, concurrency control, proxy, CA certificates, and more
 ---
 
 # KubeOpenCode Features
 
 This document covers the key features of KubeOpenCode.
 
-## Server Mode (Live Agents)
+## Live Agents
 
-Server Mode is KubeOpenCode's most powerful feature — it lets you run AI agents as persistent services on Kubernetes, available for interactive use anytime.
+Every Agent in KubeOpenCode is a persistent service — the controller always creates a Deployment + Service running `opencode serve`. There is no separate "mode" to enable.
 
-### Why Server Mode?
+### Why Always Running?
 
 - **Zero cold start**: The agent is always running. No waiting for container startup when you need help.
 - **Shared context**: Pre-load codebases, documentation, and organizational standards. All tasks share the same context.
@@ -31,7 +31,7 @@ Server Mode is KubeOpenCode's most powerful feature — it lets you run AI agent
 
 ### Setup
 
-Add `serverConfig` to your Agent spec to enable Server Mode:
+Create an Agent — the controller automatically creates a Deployment + Service:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -43,11 +43,10 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
-  serverConfig:
-    port: 4096                    # OpenCode server port (default: 4096)
-    persistence:
-      sessions:
-        size: "2Gi"               # Persist conversation history
+  port: 4096                      # OpenCode server port (default: 4096)
+  persistence:
+    sessions:
+      size: "2Gi"                 # Persist conversation history
   contexts:
     - name: codebase
       type: Git
@@ -83,25 +82,14 @@ kubeoc agent attach team-agent -n kubeopencode-system
 kubectl apply -f task.yaml
 ```
 
-### Server Mode vs Pod Mode
-
-| Aspect | Pod Mode (default) | Server Mode |
-|--------|-------------------|-------------|
-| Lifecycle | New Pod per Task | Persistent Deployment + Pod per Task |
-| Command | `opencode run "task"` | `opencode run --attach <url> "task"` |
-| Cold start | Yes (container startup) | No (server already running) |
-| Context sharing | None (isolated Pods) | Shared across Tasks via server |
-| Interaction | Logs only | Web Terminal, CLI attach, API |
-| Best for | Batch operations, CI/CD | Interactive coding, team agents |
-
-### Server Status
+### Agent Status
 
 Monitor your live agent's health:
 
 ```bash
 kubectl get agent team-agent -o wide
-# NAME         PROFILE                  MODE     STATUS
-# team-agent   Team development agent   Server   Ready
+# NAME         PROFILE                  STATUS
+# team-agent   Team development agent   Ready
 ```
 
 The Agent status includes server details:
@@ -119,7 +107,7 @@ status:
       status: "True"
 ```
 
-See [Getting Started](getting-started.md) for a complete Server Mode walkthrough.
+See [Getting Started](getting-started.md) for a complete walkthrough.
 
 ## Flexible Context System
 
@@ -604,15 +592,15 @@ spec:
           effect: "NoSchedule"
 ```
 
-## Session Persistence (Server Mode)
+## Session Persistence
 
-By default, Server-mode Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), all OpenCode session data is lost.
+By default, Agents use ephemeral storage. When the server pod restarts (due to crashes, node drains, or upgrades), all OpenCode session data is lost.
 
-Session persistence stores the OpenCode SQLite database on a PersistentVolumeClaim (PVC), so conversation history survives pod restarts. See [Server Mode (Live Agents)](#server-mode-live-agents) above for the full Server Mode overview.
+Session persistence stores the OpenCode SQLite database on a PersistentVolumeClaim (PVC), so conversation history survives pod restarts. See [Live Agents](#live-agents) above for the full overview.
 
 ### Configuration
 
-Add `persistence.sessions` to your Agent's `serverConfig`:
+Add `persistence.sessions` to your Agent spec:
 
 ```yaml
 apiVersion: kubeopencode.io/v1alpha1
@@ -623,12 +611,11 @@ spec:
   executorImage: quay.io/kubeopencode/kubeopencode-agent-devbox:latest
   workspaceDir: /workspace
   serviceAccountName: kubeopencode-agent
-  serverConfig:
-    port: 4096
-    persistence:
-      sessions:
-        storageClassName: "gp3"   # optional, uses cluster default if omitted
-        size: "2Gi"               # default: 1Gi
+  port: 4096
+  persistence:
+    sessions:
+      storageClassName: "gp3"   # optional, uses cluster default if omitted
+      size: "2Gi"               # default: 1Gi
 ```
 
 ### How It Works

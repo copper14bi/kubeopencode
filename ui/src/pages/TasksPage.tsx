@@ -10,7 +10,7 @@ import MultiSelect from '../components/MultiSelect';
 import { TableSkeleton } from '../components/Skeleton';
 import { useFilterState } from '../hooks/useFilterState';
 import { useNamespace } from '../contexts/NamespaceContext';
-import { LABEL_AGENT, appendLabelSelector } from '../utils/labels';
+import { LABEL_AGENT, LABEL_AGENT_TEMPLATE, appendLabelSelector } from '../utils/labels';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 const PHASE_OPTIONS = [
@@ -21,21 +21,25 @@ const PHASE_OPTIONS = [
   { value: 'Failed', label: 'Failed' },
 ];
 
+type SourceFilter = '' | 'agent' | 'template';
+
 function TasksPage() {
   const { namespace, isAllNamespaces } = useNamespace();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [phaseFilter, setPhaseFilter] = useState<string[]>([]);
   const [agentFilter, setAgentFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('');
   const [filters, setFilters] = useFilterState();
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [namespace, phaseFilter, agentFilter, filters.name, filters.labelSelector]);
+  }, [namespace, phaseFilter, agentFilter, sourceFilter, filters.name, filters.labelSelector]);
 
-  // Reset agent filter when namespace changes
+  // Reset filters when namespace changes
   useEffect(() => {
     setAgentFilter('');
+    setSourceFilter('');
   }, [namespace]);
 
   const { data: agentsData } = useQuery({
@@ -53,11 +57,16 @@ function TasksPage() {
   );
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['tasks', namespace, currentPage, pageSize, phaseFilter, agentFilter, filters.name, filters.labelSelector],
+    queryKey: ['tasks', namespace, currentPage, pageSize, phaseFilter, agentFilter, sourceFilter, filters.name, filters.labelSelector],
     queryFn: () => {
       let labelSelector = filters.labelSelector || '';
       if (agentFilter) {
         labelSelector = appendLabelSelector(labelSelector, `${LABEL_AGENT}=${agentFilter}`);
+      }
+      if (sourceFilter === 'agent') {
+        labelSelector = appendLabelSelector(labelSelector, LABEL_AGENT);
+      } else if (sourceFilter === 'template') {
+        labelSelector = appendLabelSelector(labelSelector, `!${LABEL_AGENT}`);
       }
       const params = {
         limit: pageSize,
@@ -109,6 +118,18 @@ function TasksPage() {
             onChange={setPhaseFilter}
             label="Status"
           />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-stone-400 font-medium">Source:</span>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+              className="block w-32 rounded-md border border-stone-200 bg-stone-50 focus:bg-white focus:border-primary-400 focus:ring-1 focus:ring-primary-200 text-xs text-stone-600 py-1.5 transition-colors"
+            >
+              <option value="">All</option>
+              <option value="agent">Agent</option>
+              <option value="template">Template</option>
+            </select>
+          </div>
           {uniqueAgentNames.length > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-stone-400 font-medium">Agent:</span>
@@ -161,7 +182,7 @@ function TasksPage() {
                   Labels
                 </th>
                 <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider">
-                  Agent
+                  Source
                 </th>
                 <th className="px-5 py-3 text-left text-[11px] font-display font-medium text-stone-400 uppercase tracking-wider hidden sm:table-cell">
                   Duration
@@ -205,8 +226,18 @@ function TasksPage() {
                     <td className="px-5 py-3.5 hidden lg:table-cell">
                       <Labels labels={task.labels} maxDisplay={2} />
                     </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap text-sm text-stone-400 font-mono text-xs">
-                      {task.agentRef?.name || 'default'}
+                    <td className="px-5 py-3.5 whitespace-nowrap text-xs">
+                      {task.agentRef ? (
+                        <Link to={`/agents/${task.namespace}/${task.agentRef.name}`} className="text-stone-500 hover:text-primary-600 font-mono transition-colors">
+                          {task.agentRef.name}
+                        </Link>
+                      ) : task.templateRef ? (
+                        <Link to={`/templates/${task.namespace}/${task.templateRef.name}`} className="text-amber-600 hover:text-amber-700 font-mono transition-colors">
+                          {task.templateRef.name}
+                        </Link>
+                      ) : (
+                        <span className="text-stone-400 font-mono">-</span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-sm text-stone-400 hidden sm:table-cell font-mono text-xs">
                       {task.duration || '-'}

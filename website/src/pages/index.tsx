@@ -16,11 +16,10 @@ metadata:
 spec:
   profile: "Interactive development agent"
   workspaceDir: /workspace
-  serverConfig:
-    port: 4096
-    persistence:
-      sessions:
-        size: "2Gi"
+  port: 4096
+  persistence:
+    sessions:
+      size: "2Gi"
   credentials:
     - name: api-key
       secretRef:
@@ -100,9 +99,8 @@ function QuickExample() {
           <div className="col col--6">
             <Heading as="h2">Submit Tasks as YAML</Heading>
             <p>
-              Define what you want done as a Task. Works in both modes &mdash;
-              Server Mode runs tasks on the persistent agent, Pod Mode creates
-              an ephemeral Pod per task for batch operations.
+              Define what you want done as a Task. Submit it to a persistent Agent
+              for interactive work, or use an AgentTemplate for ephemeral one-off tasks.
             </p>
             <ul>
               <li>No new tools to learn &mdash; just <code>kubectl apply</code></li>

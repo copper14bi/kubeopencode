@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Implemented)
+Superseded by [ADR 0022: Agent Always Running](0022-agent-always-running.md)
 
 ## Context
 

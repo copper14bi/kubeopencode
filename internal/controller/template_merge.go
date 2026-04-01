@@ -68,7 +68,9 @@ func MergeAgentWithTemplate(agent *kubeopenv1alpha1.Agent, tmpl *kubeopenv1alpha
 		caBundle:         firstNonNilCABundle(agent.Spec.CABundle, tmpl.Spec.CABundle),
 		proxy:            firstNonNilProxy(agent.Spec.Proxy, tmpl.Spec.Proxy),
 		imagePullSecrets: firstNonNilIPS(agent.Spec.ImagePullSecrets, tmpl.Spec.ImagePullSecrets),
-		serverConfig:     agent.Spec.ServerConfig,
+		port:             agent.Spec.Port,
+		persistence:      agent.Spec.Persistence,
+		suspend:          agent.Spec.Suspend,
 	}
 
 	return merged
