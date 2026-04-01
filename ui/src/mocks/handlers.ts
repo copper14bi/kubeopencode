@@ -93,7 +93,7 @@ function buildTemplateListResponse(templates: AgentTemplate[], url: URL) {
 export const handlers = [
   // === Server info ===
   http.get(`${API_BASE}/info`, () => {
-    return HttpResponse.json({ version: '0.0.14-mock' });
+    return HttpResponse.json({ version: '0.0.15-mock' });
   }),
 
   // === Namespaces ===
