@@ -481,13 +481,17 @@ var _ = Describe("Task E2E Tests", Label(LabelTask), func() {
 			}, timeout, interval).Should(Equal(kubeopenv1alpha1.TaskPhaseRunning))
 
 			By("Adding terminate annotation to the Task")
-			runningTask := &kubeopenv1alpha1.Task{}
-			Expect(k8sClient.Get(ctx, taskKey, runningTask)).Should(Succeed())
-			if runningTask.Annotations == nil {
-				runningTask.Annotations = make(map[string]string)
-			}
-			runningTask.Annotations["kubeopencode.io/stop"] = "true"
-			Expect(k8sClient.Update(ctx, runningTask)).Should(Succeed())
+			Eventually(func() error {
+				runningTask := &kubeopenv1alpha1.Task{}
+				if err := k8sClient.Get(ctx, taskKey, runningTask); err != nil {
+					return err
+				}
+				if runningTask.Annotations == nil {
+					runningTask.Annotations = make(map[string]string)
+				}
+				runningTask.Annotations["kubeopencode.io/stop"] = "true"
+				return k8sClient.Update(ctx, runningTask)
+			}, timeout, interval).Should(Succeed())
 
 			By("Verifying Task transitions to Completed with Stopped condition")
 			Eventually(func() kubeopenv1alpha1.TaskPhase {

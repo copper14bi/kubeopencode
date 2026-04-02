@@ -838,10 +838,14 @@ var _ = Describe("Agent Deployment E2E Tests", Label(LabelServer), func() {
 
 			By("Suspending the Agent")
 			agentKey := types.NamespacedName{Name: agentName, Namespace: testNS}
-			var updated kubeopenv1alpha1.Agent
-			Expect(k8sClient.Get(ctx, agentKey, &updated)).Should(Succeed())
-			updated.Spec.Suspend = true
-			Expect(k8sClient.Update(ctx, &updated)).Should(Succeed())
+			Eventually(func() error {
+				var updated kubeopenv1alpha1.Agent
+				if err := k8sClient.Get(ctx, agentKey, &updated); err != nil {
+					return err
+				}
+				updated.Spec.Suspend = true
+				return k8sClient.Update(ctx, &updated)
+			}, timeout, interval).Should(Succeed())
 
 			By("Expecting Deployment to scale to 0 replicas")
 			Eventually(func() int32 {
@@ -865,9 +869,14 @@ var _ = Describe("Agent Deployment E2E Tests", Label(LabelServer), func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("Resuming the Agent")
-			Expect(k8sClient.Get(ctx, agentKey, &updated)).Should(Succeed())
-			updated.Spec.Suspend = false
-			Expect(k8sClient.Update(ctx, &updated)).Should(Succeed())
+			Eventually(func() error {
+				var updated kubeopenv1alpha1.Agent
+				if err := k8sClient.Get(ctx, agentKey, &updated); err != nil {
+					return err
+				}
+				updated.Spec.Suspend = false
+				return k8sClient.Update(ctx, &updated)
+			}, timeout, interval).Should(Succeed())
 
 			By("Expecting Deployment to scale back to 1 replica")
 			Eventually(func() int32 {

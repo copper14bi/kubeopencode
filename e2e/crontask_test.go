@@ -115,13 +115,17 @@ var _ = Describe("CronTask E2E Tests", Label(LabelCronTask), func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("Adding trigger annotation")
-			ct := &kubeopenv1alpha1.CronTask{}
-			Expect(k8sClient.Get(ctx, cronTaskKey, ct)).Should(Succeed())
-			if ct.Annotations == nil {
-				ct.Annotations = make(map[string]string)
-			}
-			ct.Annotations[kubeopenv1alpha1.CronTaskTriggerAnnotation] = "true"
-			Expect(k8sClient.Update(ctx, ct)).Should(Succeed())
+			Eventually(func() error {
+				ct := &kubeopenv1alpha1.CronTask{}
+				if err := k8sClient.Get(ctx, cronTaskKey, ct); err != nil {
+					return err
+				}
+				if ct.Annotations == nil {
+					ct.Annotations = make(map[string]string)
+				}
+				ct.Annotations[kubeopenv1alpha1.CronTaskTriggerAnnotation] = "true"
+				return k8sClient.Update(ctx, ct)
+			}, timeout, interval).Should(Succeed())
 
 			By("Verifying a child Task is created with crontask label")
 			Eventually(func() int {
@@ -192,11 +196,15 @@ var _ = Describe("CronTask E2E Tests", Label(LabelCronTask), func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("Suspending the CronTask")
-			ct := &kubeopenv1alpha1.CronTask{}
-			Expect(k8sClient.Get(ctx, cronTaskKey, ct)).Should(Succeed())
-			suspend := true
-			ct.Spec.Suspend = &suspend
-			Expect(k8sClient.Update(ctx, ct)).Should(Succeed())
+			Eventually(func() error {
+				ct := &kubeopenv1alpha1.CronTask{}
+				if err := k8sClient.Get(ctx, cronTaskKey, ct); err != nil {
+					return err
+				}
+				suspend := true
+				ct.Spec.Suspend = &suspend
+				return k8sClient.Update(ctx, ct)
+			}, timeout, interval).Should(Succeed())
 
 			By("Verifying nextScheduleTime is cleared when suspended")
 			Eventually(func() bool {
@@ -208,10 +216,15 @@ var _ = Describe("CronTask E2E Tests", Label(LabelCronTask), func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("Resuming the CronTask")
-			Expect(k8sClient.Get(ctx, cronTaskKey, ct)).Should(Succeed())
-			suspend = false
-			ct.Spec.Suspend = &suspend
-			Expect(k8sClient.Update(ctx, ct)).Should(Succeed())
+			Eventually(func() error {
+				ct := &kubeopenv1alpha1.CronTask{}
+				if err := k8sClient.Get(ctx, cronTaskKey, ct); err != nil {
+					return err
+				}
+				suspend := false
+				ct.Spec.Suspend = &suspend
+				return k8sClient.Update(ctx, ct)
+			}, timeout, interval).Should(Succeed())
 
 			By("Verifying nextScheduleTime is restored after resume")
 			Eventually(func() bool {
@@ -261,13 +274,17 @@ var _ = Describe("CronTask E2E Tests", Label(LabelCronTask), func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("Triggering a child Task")
-			ct := &kubeopenv1alpha1.CronTask{}
-			Expect(k8sClient.Get(ctx, cronTaskKey, ct)).Should(Succeed())
-			if ct.Annotations == nil {
-				ct.Annotations = make(map[string]string)
-			}
-			ct.Annotations[kubeopenv1alpha1.CronTaskTriggerAnnotation] = "true"
-			Expect(k8sClient.Update(ctx, ct)).Should(Succeed())
+			Eventually(func() error {
+				ct := &kubeopenv1alpha1.CronTask{}
+				if err := k8sClient.Get(ctx, cronTaskKey, ct); err != nil {
+					return err
+				}
+				if ct.Annotations == nil {
+					ct.Annotations = make(map[string]string)
+				}
+				ct.Annotations[kubeopenv1alpha1.CronTaskTriggerAnnotation] = "true"
+				return k8sClient.Update(ctx, ct)
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for child Task to be created")
 			Eventually(func() int {
