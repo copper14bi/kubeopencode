@@ -363,8 +363,8 @@ var _ = Describe("CronTaskController", func() {
 		})
 	})
 
-	Context("OwnerReference garbage collection", func() {
-		It("Should garbage collect child Tasks when CronTask is deleted", func() {
+	Context("OwnerReference setup", func() {
+		It("Should set correct ownerReference on child Tasks", func() {
 			cronTaskName := fmt.Sprintf("ct-gc-%d", time.Now().UnixNano())
 			cronTask := newCronTask(cronTaskName, farFutureSchedule)
 
@@ -409,20 +409,11 @@ var _ = Describe("CronTaskController", func() {
 			Expect(childTask.OwnerReferences[0].Controller).ShouldNot(BeNil())
 			Expect(*childTask.OwnerReferences[0].Controller).Should(BeTrue())
 
-			By("Deleting the CronTask")
-			Expect(k8sClient.Get(ctx, lookup, created)).Should(Succeed())
-			Expect(k8sClient.Delete(ctx, created)).Should(Succeed())
+			// Note: Actual garbage collection (cascade delete) is tested in E2E tests.
+			// envtest does not run the Kubernetes GC controller.
 
-			By("Verifying child Tasks are garbage collected")
-			Eventually(func() int {
-				if err := k8sClient.List(ctx, taskList,
-					client.InNamespace(cronTaskNamespace),
-					client.MatchingLabels{kubeopenv1alpha1.CronTaskLabelKey: cronTaskName},
-				); err != nil {
-					return -1
-				}
-				return len(taskList.Items)
-			}, timeout, interval).Should(Equal(0))
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, created)).Should(Succeed())
 		})
 	})
 })
