@@ -201,12 +201,18 @@ jobs:
           username: ${{ secrets.QUAY_ROBOT_ACCOUNT }}
           password: ${{ secrets.QUAY_TOKEN }}
 
+      - name: Extract OPENCODE_VERSION from agents/Makefile
+        id: opencode-version
+        run: echo "version=$(grep '^OPENCODE_VERSION' agents/Makefile | head -1 | sed 's/.*?= *//')" >> "$GITHUB_OUTPUT"
+
       - name: Build and push opencode agent
         uses: docker/build-push-action@v7
         with:
           context: ./agents/opencode
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            OPENCODE_VERSION=${{ steps.opencode-version.outputs.version }}
           tags: |
             ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-opencode:${{ needs.prepare.outputs.tag }}
             ${{ env.IMG_REGISTRY }}/${{ env.IMG_ORG }}/kubeopencode-agent-opencode:latest
