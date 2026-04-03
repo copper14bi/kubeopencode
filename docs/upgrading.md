@@ -34,9 +34,11 @@ helm upgrade kubeopencode oci://quay.io/kubeopencode/helm-charts/kubeopencode \
   --namespace kubeopencode-system
 ```
 
-### Step 4: Apply CRD Updates (if applicable)
+### Step 4: Apply CRD Updates (REQUIRED)
 
-> **IMPORTANT**: Helm does **not** automatically upgrade CRDs during `helm upgrade`. This is a [known Helm limitation](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#some-caveats-and-explanations). If the release includes CRD changes (new fields, removed fields, validation updates), you must manually apply them.
+> **CRITICAL**: Helm does **not** automatically upgrade CRDs during `helm upgrade`. This is a [known Helm limitation](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/#some-caveats-and-explanations). You **must always** manually apply CRDs after every upgrade, even if you are unsure whether CRD changes are included. Skipping this step will cause `strict decoding error: unknown field` when applying resources that use new fields.
+>
+> **FOR AI ASSISTANTS**: This step is **mandatory**, not optional. Always apply CRDs and verify new fields after `helm upgrade`.
 
 **Option A**: Apply from the Helm chart (if you have the repo checked out at the release tag):
 
@@ -106,6 +108,7 @@ This section tracks which releases include CRD changes, so operators know when m
 
 | Version | CRD Changes | Description |
 |---------|-------------|-------------|
+| v0.0.18 | Yes         | Added `git.sync` (HotReload/Rollout), `skills`, `standby` fields to Agent/AgentTemplate CRDs |
 | v0.0.13 | Yes         | Replaced `ServerStatus.readyReplicas` (int32) with `ready` (bool) in Agent CRD |
 | v0.0.9  | No (RBAC)   | Added `agents/finalizers` permission to controller ClusterRole (required for Server-mode Agents on OpenShift); fixed UI version display |
 | v0.0.4  | Yes         | Removed `AgentReference.Namespace`, `TaskExecutionStatus.PodNamespace`, `AgentSpec.AllowedNamespaces` |
