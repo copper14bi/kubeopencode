@@ -5,7 +5,7 @@ all: build
 .PHONY: all
 
 # Version information
-VERSION ?= 0.0.17
+VERSION ?= 0.0.18
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
@@ -33,8 +33,7 @@ $(LOCALBIN):
 CONTROLLER_GEN_VERSION := v0.16.5
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 
-# golangci-lint setup
-GOLANGCI_LINT_VERSION := v2.6.2
+# golangci-lint (version auto-detected by ci/lint/run-lint.sh based on Go version)
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 
 # Ensure GOPATH is set
@@ -52,12 +51,7 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 	@test -s $(CONTROLLER_GEN) || \
 		GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
 
-# Download golangci-lint locally if not present
-.PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint if not present
-$(GOLANGCI_LINT): $(LOCALBIN)
-	@test -s $(GOLANGCI_LINT) || \
-		GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+# golangci-lint is installed automatically by ci/lint/run-lint.sh
 
 # Vendor dependencies
 vendor:
@@ -108,22 +102,11 @@ test:
 # Integration test runs envtest-based controller tests.
 # Requires -tags=integration to include files with //go:build integration.
 # envtest provides a local API server and etcd for testing without a full cluster.
-integration-test: envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" \
+# K8s version and setup-envtest version are auto-detected from go.mod.
+integration-test:
+	KUBEBUILDER_ASSETS="$$(LOCALBIN=$(LOCALBIN) ./ci/envtest/ensure-envtest.sh)" \
 		go test -v -tags=integration ./internal/controller/... -coverprofile cover.out
 .PHONY: integration-test
-
-# Envtest K8s version
-ENVTEST_K8S_VERSION ?= 1.35.0
-
-# envtest setup
-ENVTEST ?= $(LOCALBIN)/setup-envtest
-
-.PHONY: envtest
-envtest: $(ENVTEST) ## Download setup-envtest if not present
-$(ENVTEST): $(LOCALBIN)
-	@test -s $(ENVTEST) || \
-		GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
 # Clean
 clean:
@@ -280,9 +263,9 @@ fmt:
 	go fmt ./...
 .PHONY: fmt
 
-# Lint code
-lint: golangci-lint
-	$(GOLANGCI_LINT) run
+# Lint code (auto-detects and installs compatible golangci-lint version)
+lint:
+	@LOCALBIN=$(LOCALBIN) ./ci/lint/run-lint.sh
 .PHONY: lint
 
 ##@ E2E Testing

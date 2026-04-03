@@ -83,6 +83,8 @@ make verify
 # Run all test levels
 make test
 make integration-test
+
+# Run lint and fix ALL issues before proceeding
 make lint
 
 # Verify version command works
@@ -92,6 +94,8 @@ go run -ldflags "-X main.Version=NEW_VERSION" ./cmd/kubeopencode version
 helm template kubeopencode charts/kubeopencode | grep 'image:'
 # Expected: quay.io/kubeopencode/kubeopencode:vNEW_VERSION
 ```
+
+> **IMPORTANT**: `make lint` must report **0 issues** before proceeding to Step 4. The lint version is auto-detected from Go version (see `ci/lint/run-lint.sh`), so upgrading Go may surface new lint findings. Fix all issues on the release branch before creating the PR.
 
 ### Step 4: Commit and Create PR
 
