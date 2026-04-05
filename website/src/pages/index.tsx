@@ -118,7 +118,32 @@ function HeroSection(): ReactNode {
   );
 }
 
-// Section 3: Features
+// Section 3: Demo Video
+function DemoSection(): ReactNode {
+  return (
+    <section id="demo" className={styles.section}>
+      <div className="container">
+        <div className={styles.sectionHeader}>
+          <Heading as="h2">Demo</Heading>
+          <p className={styles.sectionSubtitle}>
+            See KubeOpenCode in action.
+          </p>
+        </div>
+        <div className={styles.demoVideoContainer}>
+          <iframe
+            className={styles.demoVideo}
+            src="https://www.youtube.com/embed/H_m8PMFQppc"
+            title="KubeOpenCode Demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Section 4: Features
 type FeatureItem = {
   title: string;
   icon: string;
@@ -453,6 +478,7 @@ export default function Home(): ReactNode {
       <AlphaBanner />
       <HeroSection />
       <main>
+        <DemoSection />
         <FeaturesSection />
         <HowItWorksSection />
         <ArchitectureSection />

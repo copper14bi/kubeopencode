@@ -22,7 +22,7 @@
 <br>
 
 <p align="center">
-  <a href="https://x.com/Xzhaojun/status/2040792602249928931"><img src="https://img.shields.io/badge/▶_Watch_Demo-black?style=for-the-badge&logo=x&logoColor=white" alt="Watch Demo"></a>
+  <a href="https://youtu.be/H_m8PMFQppc"><img src="https://img.shields.io/badge/▶_Watch_Demo-red?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Demo"></a>
 </p>
 
 ---
