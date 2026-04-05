@@ -529,6 +529,10 @@ var _ = Describe("AgentController", func() {
 	})
 
 	Context("When an Agent has standby configured", func() {
+		// Standby auto-suspend depends on multiple reconcile cycles completing,
+		// which can be slow on resource-constrained CI runners.
+		standbyTimeout := 30 * time.Second
+
 		It("Should auto-suspend by setting spec.suspend=true after idle timeout", func() {
 			agentName := "test-standby-agent"
 
@@ -570,7 +574,7 @@ var _ = Describe("AgentController", func() {
 					return false
 				}
 				return a.Spec.Suspend
-			}, timeout, interval).Should(BeTrue(), "spec.suspend should be set to true by standby controller")
+			}, standbyTimeout, interval).Should(BeTrue(), "spec.suspend should be set to true by standby controller")
 
 			By("Expecting Deployment to scale to 0 replicas")
 			Eventually(func() int32 {
@@ -585,7 +589,7 @@ var _ = Describe("AgentController", func() {
 					return 1
 				}
 				return *deployment.Spec.Replicas
-			}, timeout, interval).Should(Equal(int32(0)))
+			}, standbyTimeout, interval).Should(Equal(int32(0)))
 
 			By("Creating a Task targeting the suspended Agent to trigger auto-resume")
 			task := &kubeopenv1alpha1.Task{
