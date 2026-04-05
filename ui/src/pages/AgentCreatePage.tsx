@@ -207,7 +207,13 @@ function AgentCreatePage() {
               type="text"
               id="name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                const sanitized = e.target.value
+                  .toLowerCase()
+                  .replace(/\s+/g, '-')
+                  .replace(/[^a-z0-9\-.]/g, '');
+                setName(sanitized);
+              }}
               required
               placeholder="my-agent"
               className={inputClass}
