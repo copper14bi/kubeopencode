@@ -23,3 +23,4 @@ KubeOpenCode brings Agentic AI capabilities into the Kubernetes ecosystem. Here'
 - **[Persistence & Lifecycle](persistence.md)** - Session/workspace persistence, suspend/resume, and standby
 - **[Enterprise (Proxy, CA, Registry)](enterprise.md)** - Corporate proxy, custom CA certificates, and private registry authentication
 - **[Pod Configuration](pod-configuration.md)** - Pod security, scheduling, and advanced settings
+- **[Docker in Docker](docker-in-docker.md)** - Run Docker inside agent containers (Sysbox, privileged, rootless)
