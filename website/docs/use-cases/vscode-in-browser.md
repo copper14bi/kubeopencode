@@ -34,9 +34,7 @@ USER root
 # Install code-server
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 
-# Create startup wrapper that launches code-server in background.
-# KubeOpenCode overrides the container's ENTRYPOINT with its own command,
-# so we use a wrapper script that is sourced by the shell profile.
+# Create startup script
 RUN cat > /usr/local/bin/start-code-server.sh << 'EOF'
 #!/bin/bash
 # Start code-server in background if not already running
@@ -52,8 +50,8 @@ fi
 EOF
 RUN chmod +x /usr/local/bin/start-code-server.sh
 
-# Auto-start code-server when any shell opens (works with KubeOpenCode's
-# "sh -c ..." command pattern since opencode spawns shell subprocesses)
+# Auto-start code-server when interactive shells open.
+# This covers shell subprocesses spawned by OpenCode tools.
 RUN echo '/usr/local/bin/start-code-server.sh' >> /etc/bash.bashrc && \
     echo '/usr/local/bin/start-code-server.sh' >> /etc/zsh/zshrc
 
@@ -61,6 +59,13 @@ USER 1000:0
 WORKDIR /workspace
 CMD ["/bin/zsh"]
 ```
+
+> **Important**: KubeOpenCode overrides the container's `ENTRYPOINT` with `sh -c "/tools/opencode serve ..."`, which is a non-interactive shell that does not read `bashrc`/`zshrc`. This means code-server starts when OpenCode first spawns an interactive shell subprocess (e.g., during the first Task), not immediately at Pod startup.
+>
+> To start code-server immediately after the Pod is ready:
+> ```bash
+> kubectl exec deployment/<agent-name>-server -n <namespace> -- /usr/local/bin/start-code-server.sh
+> ```
 
 Build and push:
 
