@@ -157,6 +157,168 @@ var _ = Describe("AgentController", func() {
 		})
 	})
 
+	Context("When creating an Agent with ExtraPorts", func() {
+		It("Should create Deployment and Service with extra ports", func() {
+			agentName := "test-extra-ports-agent"
+
+			By("Creating an Agent with ExtraPorts")
+			agent := &kubeopenv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: agentNamespace,
+				},
+				Spec: kubeopenv1alpha1.AgentSpec{
+					ExecutorImage:      "ghcr.io/kubeopencode/kubeopencode-agent-devbox:latest",
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "test-agent",
+					Port:               4096,
+					ExtraPorts: []kubeopenv1alpha1.ExtraPort{
+						{Name: "webapp", Port: 3000},
+						{Name: "vscode", Port: 8080, Protocol: corev1.ProtocolTCP},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
+
+			By("Expecting Deployment with extra container ports")
+			deploymentName := ServerDeploymentName(agentName)
+			Eventually(func() int {
+				var deployment appsv1.Deployment
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: agentNamespace,
+				}, &deployment); err != nil {
+					return 0
+				}
+				if len(deployment.Spec.Template.Spec.Containers) == 0 {
+					return 0
+				}
+				return len(deployment.Spec.Template.Spec.Containers[0].Ports)
+			}, timeout, interval).Should(Equal(3)) // http + webapp + vscode
+
+			By("Verifying Deployment container port details")
+			var deployment appsv1.Deployment
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      deploymentName,
+				Namespace: agentNamespace,
+			}, &deployment)).Should(Succeed())
+			ports := deployment.Spec.Template.Spec.Containers[0].Ports
+			Expect(ports[0].Name).To(Equal("http"))
+			Expect(ports[0].ContainerPort).To(Equal(int32(4096)))
+			Expect(ports[1].Name).To(Equal("webapp"))
+			Expect(ports[1].ContainerPort).To(Equal(int32(3000)))
+			Expect(ports[2].Name).To(Equal("vscode"))
+			Expect(ports[2].ContainerPort).To(Equal(int32(8080)))
+
+			By("Expecting Service with extra service ports")
+			serviceName := ServerServiceName(agentName)
+			var service corev1.Service
+			Eventually(func() int {
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      serviceName,
+					Namespace: agentNamespace,
+				}, &service); err != nil {
+					return 0
+				}
+				return len(service.Spec.Ports)
+			}, timeout, interval).Should(Equal(3))
+
+			By("Verifying Service port details")
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      serviceName,
+				Namespace: agentNamespace,
+			}, &service)).Should(Succeed())
+			Expect(service.Spec.Ports[0].Name).To(Equal("http"))
+			Expect(service.Spec.Ports[0].Port).To(Equal(int32(4096)))
+			Expect(service.Spec.Ports[1].Name).To(Equal("webapp"))
+			Expect(service.Spec.Ports[1].Port).To(Equal(int32(3000)))
+			Expect(service.Spec.Ports[2].Name).To(Equal("vscode"))
+			Expect(service.Spec.Ports[2].Port).To(Equal(int32(8080)))
+
+			By("Cleaning up the Agent")
+			Expect(k8sClient.Delete(ctx, agent)).Should(Succeed())
+		})
+	})
+
+	Context("When updating Agent ExtraPorts", func() {
+		It("Should update the Deployment and Service with new extra ports", func() {
+			agentName := "test-update-extra-ports"
+
+			By("Creating an Agent without ExtraPorts")
+			agent := &kubeopenv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: agentNamespace,
+				},
+				Spec: kubeopenv1alpha1.AgentSpec{
+					ExecutorImage:      "ghcr.io/kubeopencode/kubeopencode-agent-devbox:latest",
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "test-agent",
+					Port:               4096,
+				},
+			}
+			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
+
+			By("Waiting for Deployment to be created with 1 port")
+			deploymentName := ServerDeploymentName(agentName)
+			Eventually(func() int {
+				var deployment appsv1.Deployment
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: agentNamespace,
+				}, &deployment); err != nil {
+					return 0
+				}
+				if len(deployment.Spec.Template.Spec.Containers) == 0 {
+					return 0
+				}
+				return len(deployment.Spec.Template.Spec.Containers[0].Ports)
+			}, timeout, interval).Should(Equal(1))
+
+			By("Updating the Agent to add ExtraPorts")
+			var updatedAgent kubeopenv1alpha1.Agent
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      agentName,
+				Namespace: agentNamespace,
+			}, &updatedAgent)).Should(Succeed())
+			updatedAgent.Spec.ExtraPorts = []kubeopenv1alpha1.ExtraPort{
+				{Name: "webapp", Port: 3000},
+			}
+			Expect(k8sClient.Update(ctx, &updatedAgent)).Should(Succeed())
+
+			By("Expecting Deployment to be updated with 2 ports")
+			Eventually(func() int {
+				var deployment appsv1.Deployment
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      deploymentName,
+					Namespace: agentNamespace,
+				}, &deployment); err != nil {
+					return 0
+				}
+				if len(deployment.Spec.Template.Spec.Containers) == 0 {
+					return 0
+				}
+				return len(deployment.Spec.Template.Spec.Containers[0].Ports)
+			}, timeout, interval).Should(Equal(2))
+
+			By("Expecting Service to be updated with 2 ports")
+			serviceName := ServerServiceName(agentName)
+			Eventually(func() int {
+				var service corev1.Service
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      serviceName,
+					Namespace: agentNamespace,
+				}, &service); err != nil {
+					return 0
+				}
+				return len(service.Spec.Ports)
+			}, timeout, interval).Should(Equal(2))
+
+			By("Cleaning up the Agent")
+			Expect(k8sClient.Delete(ctx, &updatedAgent)).Should(Succeed())
+		})
+	})
+
 	Context("When updating Agent context content", func() {
 		It("Should update the Deployment pod template hash annotation", func() {
 			agentName := "test-context-hash-agent"

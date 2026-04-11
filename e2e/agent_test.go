@@ -1218,4 +1218,80 @@ var _ = Describe("Agent E2E Tests", Label(LabelAgent), func() {
 			Expect(k8sClient.Delete(ctx, secret)).Should(Succeed())
 		})
 	})
+
+	Context("Agent with extraPorts", func() {
+		It("should expose extra ports on Deployment and Service", func() {
+			agentName := uniqueName("ws-extra-ports")
+
+			By("Creating Agent with ExtraPorts")
+			agent := &kubeopenv1alpha1.Agent{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      agentName,
+					Namespace: testNS,
+				},
+				Spec: kubeopenv1alpha1.AgentSpec{
+					AgentImage:         agentImage,
+					ExecutorImage:      echoImage,
+					ServiceAccountName: testServiceAccount,
+					WorkspaceDir:       "/workspace",
+					Port:               4096,
+					ExtraPorts: []kubeopenv1alpha1.ExtraPort{
+						{Name: "webapp", Port: 3000},
+						{Name: "vscode", Port: 8080, Protocol: corev1.ProtocolTCP},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, agent)).Should(Succeed())
+
+			By("Waiting for Deployment to be created with extra container ports")
+			deploymentKey := types.NamespacedName{
+				Name:      agentName + "-server",
+				Namespace: testNS,
+			}
+			Eventually(func() int {
+				var deployment appsv1.Deployment
+				if err := k8sClient.Get(ctx, deploymentKey, &deployment); err != nil {
+					return 0
+				}
+				if len(deployment.Spec.Template.Spec.Containers) == 0 {
+					return 0
+				}
+				return len(deployment.Spec.Template.Spec.Containers[0].Ports)
+			}, timeout, interval).Should(Equal(3)) // http + webapp + vscode
+
+			By("Verifying Deployment container port details")
+			var deployment appsv1.Deployment
+			Expect(k8sClient.Get(ctx, deploymentKey, &deployment)).Should(Succeed())
+			ports := deployment.Spec.Template.Spec.Containers[0].Ports
+			Expect(ports[0].Name).To(Equal("http"))
+			Expect(ports[0].ContainerPort).To(Equal(int32(4096)))
+			Expect(ports[1].Name).To(Equal("webapp"))
+			Expect(ports[1].ContainerPort).To(Equal(int32(3000)))
+			Expect(ports[2].Name).To(Equal("vscode"))
+			Expect(ports[2].ContainerPort).To(Equal(int32(8080)))
+
+			By("Verifying Service has extra ports")
+			serviceKey := types.NamespacedName{
+				Name:      agentName,
+				Namespace: testNS,
+			}
+			var service corev1.Service
+			Eventually(func() int {
+				if err := k8sClient.Get(ctx, serviceKey, &service); err != nil {
+					return 0
+				}
+				return len(service.Spec.Ports)
+			}, timeout, interval).Should(Equal(3))
+
+			Expect(service.Spec.Ports[0].Name).To(Equal("http"))
+			Expect(service.Spec.Ports[0].Port).To(Equal(int32(4096)))
+			Expect(service.Spec.Ports[1].Name).To(Equal("webapp"))
+			Expect(service.Spec.Ports[1].Port).To(Equal(int32(3000)))
+			Expect(service.Spec.Ports[2].Name).To(Equal("vscode"))
+			Expect(service.Spec.Ports[2].Port).To(Equal(int32(8080)))
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, agent)).Should(Succeed())
+		})
+	})
 })

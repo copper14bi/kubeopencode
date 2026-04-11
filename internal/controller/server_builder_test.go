@@ -1755,6 +1755,104 @@ func TestBuildServerDeployment_SkillNamesPerNameMount(t *testing.T) {
 	})
 }
 
+func TestBuildServerService_WithExtraPorts(t *testing.T) {
+	agent := &kubeopenv1alpha1.Agent{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "dind-agent",
+			Namespace: "default",
+		},
+		Spec: kubeopenv1alpha1.AgentSpec{
+			Port: 4096,
+			ExtraPorts: []kubeopenv1alpha1.ExtraPort{
+				{Name: "webapp", Port: 3000},
+				{Name: "vscode", Port: 8080, Protocol: corev1.ProtocolTCP},
+			},
+		},
+	}
+
+	service := BuildServerService(agent)
+	if service == nil {
+		t.Fatal("BuildServerService returned nil")
+	}
+
+	// Should have main port + 2 extra ports = 3 total
+	if len(service.Spec.Ports) != 3 {
+		t.Fatalf("expected 3 service ports, got %d", len(service.Spec.Ports))
+	}
+
+	// Main port
+	if service.Spec.Ports[0].Name != "http" || service.Spec.Ports[0].Port != 4096 {
+		t.Errorf("expected main port http:4096, got %s:%d", service.Spec.Ports[0].Name, service.Spec.Ports[0].Port)
+	}
+	if service.Spec.Ports[0].TargetPort.IntVal != 4096 {
+		t.Errorf("expected main targetPort 4096, got %d", service.Spec.Ports[0].TargetPort.IntVal)
+	}
+
+	// Extra port 1
+	if service.Spec.Ports[1].Name != "webapp" || service.Spec.Ports[1].Port != 3000 {
+		t.Errorf("expected webapp:3000, got %s:%d", service.Spec.Ports[1].Name, service.Spec.Ports[1].Port)
+	}
+	if service.Spec.Ports[1].TargetPort.IntVal != 3000 {
+		t.Errorf("expected webapp targetPort 3000, got %d", service.Spec.Ports[1].TargetPort.IntVal)
+	}
+
+	// Extra port 2
+	if service.Spec.Ports[2].Name != "vscode" || service.Spec.Ports[2].Port != 8080 {
+		t.Errorf("expected vscode:8080, got %s:%d", service.Spec.Ports[2].Name, service.Spec.Ports[2].Port)
+	}
+}
+
+func TestBuildServerService_WithoutExtraPorts(t *testing.T) {
+	agent := &kubeopenv1alpha1.Agent{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "simple-agent",
+			Namespace: "default",
+		},
+		Spec: kubeopenv1alpha1.AgentSpec{
+			Port: 4096,
+		},
+	}
+
+	service := BuildServerService(agent)
+	if len(service.Spec.Ports) != 1 {
+		t.Fatalf("expected 1 service port, got %d", len(service.Spec.Ports))
+	}
+	if service.Spec.Ports[0].Name != "http" || service.Spec.Ports[0].Port != 4096 {
+		t.Errorf("expected main port http:4096, got %s:%d", service.Spec.Ports[0].Name, service.Spec.Ports[0].Port)
+	}
+}
+
+func TestBuildServerService_ExtraPortDefaultProtocol(t *testing.T) {
+	agent := &kubeopenv1alpha1.Agent{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "proto-agent",
+			Namespace: "default",
+		},
+		Spec: kubeopenv1alpha1.AgentSpec{
+			Port: 4096,
+			ExtraPorts: []kubeopenv1alpha1.ExtraPort{
+				{Name: "no-proto", Port: 9090},                               // no protocol specified
+				{Name: "udp-port", Port: 5353, Protocol: corev1.ProtocolUDP}, // explicit UDP
+			},
+		},
+	}
+
+	service := BuildServerService(agent)
+	if len(service.Spec.Ports) != 3 {
+		t.Fatalf("expected 3 service ports, got %d", len(service.Spec.Ports))
+	}
+
+	// Default protocol should be TCP
+	if service.Spec.Ports[1].Protocol != corev1.ProtocolTCP {
+		t.Errorf("expected default protocol TCP for no-proto, got %s", service.Spec.Ports[1].Protocol)
+	}
+
+	// Explicit UDP should be preserved
+	if service.Spec.Ports[2].Protocol != corev1.ProtocolUDP {
+		t.Errorf("expected UDP protocol for udp-port, got %s", service.Spec.Ports[2].Protocol)
+	}
+}
+
 func TestBuildServerDeployment_WithExtraPorts(t *testing.T) {
 	agent := &kubeopenv1alpha1.Agent{
 		ObjectMeta: metav1.ObjectMeta{
