@@ -1,0 +1,38 @@
+# Copyright Contributors to the KubeOpenCode project
+# Docker-in-Docker Agent — test agent for DinD use case (privileged mode)
+#
+# Uses a custom devbox image with Docker daemon and lazy-init wrapper.
+# Requires privileged mode (dev/test only, never use in production).
+#
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: dind-agent
+  namespace: test
+spec:
+  templateRef:
+    name: team-base
+  profile: "Development agent with Docker-in-Docker support (privileged mode)"
+  executorImage: ghcr.io/kubeopencode/kubeopencode-agent-devbox-dind:dev
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+  port: 4096
+  podSpec:
+    securityContext:
+      privileged: true
+    podSecurityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    resources:
+      requests:
+        memory: "1Gi"
+      limits:
+        memory: "8Gi"
+  config: |
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "opencode/big-pickle",
+      "small_model": "opencode/big-pickle",
+      "share": "disabled",
+      "autoupdate": false
+    }

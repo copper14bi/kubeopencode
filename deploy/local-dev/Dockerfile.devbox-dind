@@ -1,0 +1,33 @@
+# Copyright Contributors to the KubeOpenCode project
+# DinD (Docker in Docker) executor image for local testing
+#
+# Extends devbox with Docker daemon and a lazy-init wrapper.
+# See website/docs/use-cases/docker-in-docker.md for details.
+#
+FROM ghcr.io/kubeopencode/kubeopencode-agent-devbox:dev
+
+USER root
+
+# Install Docker daemon and containerd
+# (docker-ce-cli is already installed in devbox)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    docker-ce \
+    containerd.io \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install lazy-init docker wrapper
+# This transparently starts dockerd on first `docker` command
+RUN mv /usr/bin/docker /usr/bin/docker.real
+COPY --chmod=755 docker-lazy-init.sh /usr/bin/docker
+
+# /tools PATH fix (same as devbox base, ensures /tools/opencode is findable)
+RUN echo 'export PATH="/tools:${PATH}"' > /etc/profile.d/tools-path.sh
+
+# Note: USER is intentionally set to root (0) for DinD.
+# For Sysbox: inner root is mapped to unprivileged host user via user namespaces.
+# For Privileged mode: root is required to start dockerd.
+# This differs from the base devbox image which uses USER 1000:0.
+USER 0:0
+
+WORKDIR /workspace
+CMD ["/bin/zsh"]

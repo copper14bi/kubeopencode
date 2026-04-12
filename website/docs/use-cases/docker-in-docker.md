@@ -77,6 +77,17 @@ if ! ${DOCKER_REAL} info >/dev/null 2>&1; then
 
     # Double-check after acquiring lock
     if ! ${DOCKER_REAL} info >/dev/null 2>&1; then
+        # Mount tmpfs at /var/lib/docker to avoid overlay-on-overlay issues.
+        # Container filesystems use overlayfs (from containerd/CRI), and nested
+        # overlayfs is not supported on most kernels. tmpfs provides a clean
+        # non-overlay mount point where Docker can use its default storage driver.
+        # Note: This means Docker images/containers are stored in memory and
+        # lost on pod restart. For persistence, use a PVC mounted at /var/lib/docker.
+        if ! mountpoint -q /var/lib/docker 2>/dev/null; then
+            mkdir -p /var/lib/docker
+            mount -t tmpfs tmpfs /var/lib/docker
+        fi
+
         echo "Starting Docker daemon..." >&2
         dockerd &>"${DOCKERD_LOG}" &
         echo $! > "${DOCKERD_PIDFILE}"
@@ -295,14 +306,36 @@ spec:
 
 ## Tips
 
+### Overlay-on-Overlay Issue
+
+Container runtimes (containerd, CRI-O) use overlayfs for the container's root filesystem. Docker inside the container also defaults to overlayfs as its storage driver. Nesting overlayfs on top of overlayfs is not supported on most kernels and causes `mount: invalid argument` errors when running containers.
+
+The lazy-init wrapper handles this by mounting a **tmpfs** at `/var/lib/docker` before starting `dockerd`. This gives Docker a non-overlay filesystem to work with. The trade-off is that Docker images and containers are stored in memory and lost on pod restart.
+
+For persistent Docker storage, mount a **PVC** at `/var/lib/docker` instead. PVC-backed volumes use ext4/xfs (not overlayfs), so Docker's overlay storage driver works correctly:
+
+```bash
+# In docker-lazy-init.sh, replace the tmpfs mount with:
+# (Only mount tmpfs if /var/lib/docker is not already a mount point, e.g., from a PVC)
+if ! mountpoint -q /var/lib/docker 2>/dev/null; then
+    mkdir -p /var/lib/docker
+    mount -t tmpfs tmpfs /var/lib/docker
+fi
+```
+
+> **Note**: Sysbox does not have this issue — it provides a proper filesystem layer for the inner container.
+
 ### Docker Build Cache Persistence
 
-When using DinD with [persistence](persistence.md), Docker's build cache and image layers are stored inside the container by default and lost on restart. To persist them, configure Docker's data root to a path within the workspace:
+When using DinD with [persistence](persistence.md), Docker's build cache and image layers are stored in tmpfs by default and lost on restart. To persist them, use `--data-root` to point Docker's data directory to a PVC-backed path:
 
 ```bash
 # Configure in dockerd startup (modify docker-lazy-init.sh)
+# Requires a PVC mounted at /workspace
 dockerd --data-root /workspace/.docker-data &>"${DOCKERD_LOG}" &
 ```
+
+> **Note**: When using `--data-root` on a PVC-backed path, you can skip the tmpfs mount for `/var/lib/docker` since Docker won't use it.
 
 ### Registry Mirror
 
