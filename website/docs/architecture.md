@@ -182,6 +182,7 @@ Agent (running AI agent instance — always creates Deployment + Service)
     ├── standby: *StandbyConfig      (automatic suspend/resume)
     ├── contexts: []ContextItem      (inline context definitions)
     ├── skills: []SkillSource        (external SKILL.md from Git repos)
+    ├── plugins: []PluginSpec        (OpenCode plugins to load)
     ├── config: *string              (inline OpenCode JSON config)
     ├── credentials: []Credential
     ├── caBundle: *CABundleConfig    (custom CA certificates for TLS)
@@ -481,6 +482,7 @@ For detailed usage and configuration of each feature, see the [Features](feature
 - [Agent Configuration](features/agent-configuration.md) — Credentials, OpenCode config
 - [Agent Templates](features/agent-templates.md) — Reusable blueprints, merge behavior
 - [Skills](features/skills.md) — External SKILL.md from Git repos
+- [Plugins](features/plugins.md) — OpenCode plugins for deep agent customization
 - [CronTask](features/crontask.md) — Scheduled execution, concurrency policy
 - [Concurrency & Quota](features/concurrency-quota.md) — Task limits, rate limiting
 - [Persistence & Lifecycle](features/persistence.md) — PVCs, suspend/resume, standby

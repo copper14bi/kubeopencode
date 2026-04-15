@@ -5,6 +5,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // +genclient
@@ -117,6 +118,70 @@ type ProxyConfig struct {
 	NoProxy string `json:"noProxy,omitempty"`
 }
 
+// PluginTarget specifies which OpenCode plugin runtime to load the plugin into.
+// +kubebuilder:validation:Enum=server;tui
+type PluginTarget string
+
+const (
+	// PluginTargetServer loads the plugin into the OpenCode server runtime.
+	// Server plugins run in the background within `opencode serve` and provide hooks
+	// for tools, auth, events, message interception, etc.
+	// Configuration is injected into opencode.json.
+	PluginTargetServer PluginTarget = "server"
+
+	// PluginTargetTUI loads the plugin into the OpenCode TUI runtime.
+	// TUI plugins run when users interact with the Agent via `kubeoc agent attach`
+	// or the web terminal, providing custom commands, themes, and UI extensions.
+	// Configuration is injected into tui.json via OPENCODE_TUI_CONFIG.
+	PluginTargetTUI PluginTarget = "tui"
+)
+
+// PluginSpec defines an OpenCode plugin to install from the npm registry.
+// OpenCode plugins are async TypeScript functions that extend Agent capabilities.
+//
+// OpenCode supports two plugin targets:
+//   - server: backend hooks (tools, auth, events, message interception) — runs in `opencode serve`
+//   - tui: terminal UI extensions (commands, themes, UI slots) — runs during interactive sessions
+//
+// The controller creates a plugin-init container that runs `npm install` to download
+// the plugin and all its dependencies into a shared /plugins volume. OpenCode loads
+// plugins from file:///plugins/node_modules/{package} — the executor container does
+// not need npm installed.
+type PluginSpec struct {
+	// Name is the npm package specifier of the plugin.
+	// Supports standard npm specifier formats:
+	//   "cc-safety-net"                    — latest version
+	//   "cc-safety-net@0.8.2"             — specific version
+	//   "@aexol/opencode-tui"             — scoped package
+	//   "@aexol/opencode-tui@^1.0.0"      — version range
+	//
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Target specifies which OpenCode plugin runtime to load this plugin into.
+	// - "server" (default): loaded by `opencode serve`, provides backend hooks
+	// - "tui": loaded during interactive terminal sessions, provides UI extensions
+	//
+	// +optional
+	// +kubebuilder:default=server
+	Target PluginTarget `json:"target,omitempty"`
+
+	// Options is an arbitrary JSON object passed to the plugin function
+	// as the second argument (PluginOptions).
+	// Each plugin defines its own options schema.
+	//
+	// Example:
+	//   options:
+	//     endpoint: "http://otel-collector:4318"
+	//     verbose: true
+	//
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	Options *runtime.RawExtension `json:"options,omitempty"`
+}
+
 // AgentTemplateReference is a reference to an AgentTemplate in the same namespace.
 type AgentTemplateReference struct {
 	// Name of the AgentTemplate.
@@ -214,6 +279,25 @@ type AgentSpec struct {
 	// When templateRef is set, Agent skills replace template skills (same as contexts).
 	// +optional
 	Skills []SkillSource `json:"skills,omitempty"`
+
+	// Plugins declares OpenCode plugins to load for this Agent.
+	// The controller merges these into the OpenCode configuration's plugin array.
+	// Plugin credentials should be provided via spec.credentials (as env vars).
+	//
+	// Plugins extend Agent capabilities through OpenCode's hook system:
+	// custom tools, auth providers, message interception, event handling, etc.
+	//
+	// When templateRef is set, Agent plugins replace template plugins (same merge
+	// strategy as contexts, skills, and credentials).
+	//
+	// Example:
+	//   plugins:
+	//     - name: "@kubeopencode/opencode-slack-plugin"
+	//     - name: "opencode-plugin-otel"
+	//       options:
+	//         endpoint: "http://otel-collector:4318"
+	// +optional
+	Plugins []PluginSpec `json:"plugins,omitempty"`
 
 	// Config provides OpenCode configuration as a JSON string.
 	// This configuration is written to /tools/opencode.json and the OPENCODE_CONFIG

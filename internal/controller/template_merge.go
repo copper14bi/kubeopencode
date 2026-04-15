@@ -62,6 +62,7 @@ func MergeAgentWithTemplate(agent *kubeopenv1alpha1.Agent, tmpl *kubeopenv1alpha
 		command:          firstNonEmptyStringSlice(agent.Spec.Command, tmpl.Spec.Command),
 		contexts:         firstNonNilSlice(agent.Spec.Contexts, tmpl.Spec.Contexts),
 		skills:           firstNonNilSlice(agent.Spec.Skills, tmpl.Spec.Skills),
+		plugins:          firstNonNilSlice(agent.Spec.Plugins, tmpl.Spec.Plugins),
 		config:           firstNonNilPtr(agent.Spec.Config, tmpl.Spec.Config),
 		credentials:      firstNonNilSlice(agent.Spec.Credentials, tmpl.Spec.Credentials),
 		podSpec:          firstNonNilPtr(agent.Spec.PodSpec, tmpl.Spec.PodSpec),

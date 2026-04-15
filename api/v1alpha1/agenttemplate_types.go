@@ -78,6 +78,12 @@ type AgentTemplateSpec struct {
 	// +optional
 	Skills []SkillSource `json:"skills,omitempty"`
 
+	// Plugins declares OpenCode plugins to load for Agents derived from this template.
+	// The controller merges these into the OpenCode configuration's plugin array.
+	// Agents can override this list in their own spec.
+	// +optional
+	Plugins []PluginSpec `json:"plugins,omitempty"`
+
 	// Config provides OpenCode configuration as a JSON string.
 	// +optional
 	Config *string `json:"config,omitempty"`

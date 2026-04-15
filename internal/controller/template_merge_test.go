@@ -481,6 +481,56 @@ func TestMergeAgentWithTemplate(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "plugins replaced by agent",
+			agent: &kubeopenv1alpha1.Agent{
+				Spec: kubeopenv1alpha1.AgentSpec{
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "sa",
+					Plugins: []kubeopenv1alpha1.PluginSpec{
+						{Name: "slack-plugin"},
+					},
+				},
+			},
+			template: &kubeopenv1alpha1.AgentTemplate{
+				Spec: kubeopenv1alpha1.AgentTemplateSpec{
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "sa",
+					Plugins: []kubeopenv1alpha1.PluginSpec{
+						{Name: "template-plugin-a"},
+						{Name: "template-plugin-b"},
+					},
+				},
+			},
+			check: func(t *testing.T, cfg agentConfig) {
+				if len(cfg.plugins) != 1 || cfg.plugins[0].Name != "slack-plugin" {
+					t.Errorf("expected agent plugins to replace template, got %v", cfg.plugins)
+				}
+			},
+		},
+		{
+			name: "nil agent plugins inherits template plugins",
+			agent: &kubeopenv1alpha1.Agent{
+				Spec: kubeopenv1alpha1.AgentSpec{
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "sa",
+				},
+			},
+			template: &kubeopenv1alpha1.AgentTemplate{
+				Spec: kubeopenv1alpha1.AgentTemplateSpec{
+					WorkspaceDir:       "/workspace",
+					ServiceAccountName: "sa",
+					Plugins: []kubeopenv1alpha1.PluginSpec{
+						{Name: "tmpl-plugin"},
+					},
+				},
+			},
+			check: func(t *testing.T, cfg agentConfig) {
+				if len(cfg.plugins) != 1 || cfg.plugins[0].Name != "tmpl-plugin" {
+					t.Errorf("expected template plugins inherited, got %v", cfg.plugins)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

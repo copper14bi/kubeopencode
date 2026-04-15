@@ -1,0 +1,33 @@
+# Copyright Contributors to the KubeOpenCode project
+# Plugin Agent — demonstrates spec.plugins with npm-installed plugins
+#
+# The controller creates a plugin-init container that runs `npm install`
+# to download plugins into a shared /plugins volume. The executor container
+# loads plugins from file:///plugins/node_modules/<package> without npm.
+#
+apiVersion: kubeopencode.io/v1alpha1
+kind: Agent
+metadata:
+  name: plugin-test-agent
+spec:
+  agentImage: ghcr.io/kubeopencode/kubeopencode-agent-opencode:dev
+  executorImage: ghcr.io/kubeopencode/kubeopencode-agent-devbox:dev
+  workspaceDir: /workspace
+  serviceAccountName: kubeopencode-agent
+
+  plugins:
+    # Server plugin: safety-net — blocks destructive commands
+    - name: "cc-safety-net"
+
+    # TUI plugin: gentleman — animated ASCII mascot
+    - name: "plugin-gentleman"
+      target: tui
+
+  config: |
+    {
+      "$schema": "https://opencode.ai/config.json",
+      "model": "opencode/big-pickle",
+      "small_model": "opencode/big-pickle",
+      "share": "disabled",
+      "autoupdate": false
+    }

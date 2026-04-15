@@ -28,7 +28,8 @@ type agentConfig struct {
 	workspaceDir       string
 	contexts           []kubeopenv1alpha1.ContextItem
 	skills             []kubeopenv1alpha1.SkillSource
-	config             *string // OpenCode config JSON string
+	plugins            []kubeopenv1alpha1.PluginSpec // OpenCode plugins to load
+	config             *string                       // OpenCode config JSON string
 	credentials        []kubeopenv1alpha1.Credential
 	podSpec            *kubeopenv1alpha1.AgentPodSpec
 	serviceAccountName string
@@ -54,6 +55,7 @@ func ResolveAgentConfig(agent *kubeopenv1alpha1.Agent) agentConfig {
 		workspaceDir:       agent.Spec.WorkspaceDir,
 		contexts:           agent.Spec.Contexts,
 		skills:             agent.Spec.Skills,
+		plugins:            agent.Spec.Plugins,
 		config:             agent.Spec.Config,
 		credentials:        agent.Spec.Credentials,
 		podSpec:            agent.Spec.PodSpec,
@@ -85,6 +87,7 @@ func ResolveTemplateToConfig(tmpl *kubeopenv1alpha1.AgentTemplate) agentConfig {
 		workspaceDir:       tmpl.Spec.WorkspaceDir,
 		contexts:           tmpl.Spec.Contexts,
 		skills:             tmpl.Spec.Skills,
+		plugins:            tmpl.Spec.Plugins,
 		config:             tmpl.Spec.Config,
 		credentials:        tmpl.Spec.Credentials,
 		podSpec:            tmpl.Spec.PodSpec,
@@ -252,11 +255,21 @@ const (
 	// Uses "|| true" to gracefully handle read-only root filesystems.
 	OpenCodeSymlinkCmd = "ln -sf /tools/opencode /usr/local/bin/opencode 2>/dev/null || true"
 
-	// OpenCodeConfigPath is the path where OpenCode config is written
+	// PluginsVolumeName is the name of the emptyDir volume for installed plugins.
+	PluginsVolumeName = "plugins-volume"
+
+	// OpenCodeConfigPath is the path where OpenCode config (server) is written
 	OpenCodeConfigPath = "/tools/opencode.json"
+
+	// OpenCodeTUIConfigPath is the path where OpenCode TUI config is written
+	OpenCodeTUIConfigPath = "/tools/tui.json"
 
 	// OpenCodeConfigEnvVar is the environment variable name for OpenCode config path
 	OpenCodeConfigEnvVar = "OPENCODE_CONFIG"
+
+	// OpenCodeTUIConfigEnvVar is the environment variable for the TUI config path.
+	// When set, OpenCode loads TUI plugins from this config file during interactive sessions.
+	OpenCodeTUIConfigEnvVar = "OPENCODE_TUI_CONFIG"
 
 	// OpenCodeConfigContentEnvVar is the environment variable for injecting config content
 	// This is used to inject instructions for loading context files without conflicting
@@ -572,6 +585,43 @@ func buildContextInitContainer(workspaceDir string, fileMounts []fileMount, dirM
 	}
 }
 
+// buildPluginInitContainer creates an init container that installs OpenCode plugins
+// via npm into the shared /plugins volume. The executor container then loads plugins
+// from file:///plugins/node_modules/<package> without needing npm itself.
+func buildPluginInitContainer(plugins []kubeopenv1alpha1.PluginSpec, sysCfg systemConfig) corev1.Container {
+	// Collect npm package specifiers (with versions)
+	packages := make([]string, 0, len(plugins))
+	seen := make(map[string]bool)
+	for _, p := range plugins {
+		pkgName := p.Name
+		if seen[pkgName] {
+			continue
+		}
+		seen[pkgName] = true
+		packages = append(packages, pkgName)
+	}
+
+	packagesJSON, _ := json.Marshal(packages) //nolint:errcheck // string array always marshals
+
+	return corev1.Container{
+		Name:            "plugin-init",
+		Image:           sysCfg.systemImage,
+		ImagePullPolicy: sysCfg.systemImagePullPolicy,
+		Command:         []string{"/kubeopencode", "plugin-init"},
+		Env: []corev1.EnvVar{
+			{Name: "PLUGIN_PACKAGES", Value: string(packagesJSON)},
+			{Name: "PLUGIN_DIR", Value: DefaultPluginsMountBase},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      PluginsVolumeName,
+				MountPath: DefaultPluginsMountBase,
+			},
+		},
+		SecurityContext: defaultSecurityContext(),
+	}
+}
+
 // buildCredentials resolves credentials into volumes, volume mounts, and environment variables.
 func buildCredentials(credentials []kubeopenv1alpha1.Credential) ([]corev1.Volume, []corev1.VolumeMount, []corev1.EnvVar, []corev1.EnvFromSource) {
 	var volumes []corev1.Volume
@@ -867,12 +917,21 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 		corev1.EnvVar{Name: "WORKSPACE_DIR", Value: cfg.workspaceDir},
 	)
 
-	// If OpenCode config is provided or skills are configured, set OPENCODE_CONFIG env var.
-	// Skills require the config file because skills.paths is injected into it.
-	if (cfg.config != nil && *cfg.config != "") || len(cfg.skills) > 0 {
+	// If OpenCode config is provided, or skills/plugins are configured, set OPENCODE_CONFIG env var.
+	// Skills and plugins require the config file because they are injected into it.
+	if (cfg.config != nil && *cfg.config != "") || len(cfg.skills) > 0 || hasServerPlugins(cfg.plugins) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  OpenCodeConfigEnvVar,
 			Value: OpenCodeConfigPath,
+		})
+	}
+
+	// If TUI plugins are configured, set OPENCODE_TUI_CONFIG env var.
+	// This tells OpenCode where to find the TUI config during interactive sessions.
+	if hasTUIPlugins(cfg.plugins) {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  OpenCodeTUIConfigEnvVar,
+			Value: OpenCodeTUIConfigPath,
 		})
 	}
 
@@ -1096,6 +1155,26 @@ func buildPod(task *kubeopenv1alpha1.Task, podName string, cfg agentConfig, cont
 				})
 			}
 		}
+	}
+
+	// Add plugin-init container and plugins volume if plugins are configured.
+	// The plugin-init container runs `npm install` in the shared /plugins volume,
+	// so the executor container can load plugins from file:// paths without npm.
+	if len(cfg.plugins) > 0 {
+		pluginInit := buildPluginInitContainer(cfg.plugins, sysCfg)
+		initContainers = append(initContainers, pluginInit)
+
+		volumes = append(volumes, corev1.Volume{
+			Name: PluginsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      PluginsVolumeName,
+			MountPath: DefaultPluginsMountBase,
+			ReadOnly:  true,
+		})
 	}
 
 	// If we have Git mounts, add GIT_CONFIG_GLOBAL to point to shared gitconfig

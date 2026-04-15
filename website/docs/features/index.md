@@ -9,6 +9,7 @@ KubeOpenCode brings Agentic AI capabilities into the Kubernetes ecosystem. Here'
 - **[Agent Configuration](agent-configuration.md)** - Centralized execution environment and OpenCode configuration
 - **[Agent Templates](agent-templates.md)** - Reusable base configurations and ephemeral task blueprints
 - **[Skills](skills.md)** - Reusable AI agent capabilities from Git repositories
+- **[Plugins](plugins.md)** - OpenCode plugins for deep agent customization
 - **[Multi-AI Support](multi-ai.md)** - Use different agent images for various AI backends
 
 ## Automation

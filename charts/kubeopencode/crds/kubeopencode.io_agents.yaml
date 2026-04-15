@@ -626,6 +626,73 @@ spec:
                         type: string
                     type: object
                 type: object
+              plugins:
+                description: |-
+                  Plugins declares OpenCode plugins to load for this Agent.
+                  The controller merges these into the OpenCode configuration's plugin array.
+                  Plugin credentials should be provided via spec.credentials (as env vars).
+
+                  Plugins extend Agent capabilities through OpenCode's hook system:
+                  custom tools, auth providers, message interception, event handling, etc.
+
+                  When templateRef is set, Agent plugins replace template plugins (same merge
+                  strategy as contexts, skills, and credentials).
+
+                  Example:
+                    plugins:
+                      - name: "@kubeopencode/opencode-slack-plugin"
+                      - name: "opencode-plugin-otel"
+                        options:
+                          endpoint: "http://otel-collector:4318"
+                items:
+                  description: |-
+                    PluginSpec defines an OpenCode plugin to install from the npm registry.
+                    OpenCode plugins are async TypeScript functions that extend Agent capabilities.
+
+                    OpenCode supports two plugin targets:
+                      - server: backend hooks (tools, auth, events, message interception) — runs in `opencode serve`
+                      - tui: terminal UI extensions (commands, themes, UI slots) — runs during interactive sessions
+
+                    The controller creates a plugin-init container that runs `npm install` to download
+                    the plugin and all its dependencies into a shared /plugins volume. OpenCode loads
+                    plugins from file:///plugins/node_modules/{package} — the executor container does
+                    not need npm installed.
+                  properties:
+                    name:
+                      description: |-
+                        Name is the npm package specifier of the plugin.
+                        Supports standard npm specifier formats:
+                          "cc-safety-net"                    — latest version
+                          "cc-safety-net@0.8.2"             — specific version
+                          "@aexol/opencode-tui"             — scoped package
+                          "@aexol/opencode-tui@^1.0.0"      — version range
+                      minLength: 1
+                      type: string
+                    options:
+                      description: |-
+                        Options is an arbitrary JSON object passed to the plugin function
+                        as the second argument (PluginOptions).
+                        Each plugin defines its own options schema.
+
+                        Example:
+                          options:
+                            endpoint: "http://otel-collector:4318"
+                            verbose: true
+                      x-kubernetes-preserve-unknown-fields: true
+                    target:
+                      default: server
+                      description: |-
+                        Target specifies which OpenCode plugin runtime to load this plugin into.
+                        - "server" (default): loaded by `opencode serve`, provides backend hooks
+                        - "tui": loaded during interactive terminal sessions, provides UI extensions
+                      enum:
+                      - server
+                      - tui
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
               podSpec:
                 description: |-
                   PodSpec defines advanced Pod configuration for agent pods.
