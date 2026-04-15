@@ -796,8 +796,8 @@ func (r *TaskReconciler) processAllContexts(ctx context.Context, task *kubeopenv
 		}
 	}
 
-	// Process skills and inject config (skills.paths + user config → opencode.json)
-	skillGitMounts, fileMounts, err := processSkillsAndInjectConfig(cfg.skills, cfg.config, configMapData, fileMounts)
+	// Process skills/plugins and inject config (skills.paths + plugins + user config → opencode.json)
+	skillGitMounts, fileMounts, err := processSkillsPluginsAndInjectConfig(cfg.skills, cfg.plugins, cfg.config, configMapData, fileMounts)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

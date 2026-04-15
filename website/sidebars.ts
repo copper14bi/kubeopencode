@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
         'features/agent-configuration',
         'features/agent-templates',
         'features/skills',
+        'features/plugins',
         'features/multi-ai',
         'features/crontask',
         'features/git-auto-sync',
@@ -35,6 +36,7 @@ const sidebars: SidebarsConfig = {
         id: 'use-cases/index',
       },
       items: [
+        'use-cases/agent-plugins',
         'use-cases/docker-in-docker',
         'use-cases/vscode-in-browser',
       ],

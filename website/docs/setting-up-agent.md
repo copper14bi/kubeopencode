@@ -347,6 +347,21 @@ spec:
 
 KubeOpenCode automatically clones the skill repos and injects the paths into the OpenCode config. See [Skills](features/skills.md) for private repos and advanced usage.
 
+### Plugins
+
+Plugins extend Agent behavior at a deeper level — custom tools, auth providers, message interception, event handling, and more. They are OpenCode TypeScript plugins declared on the Agent spec. The controller creates a plugin-init container that runs `npm install` to download plugins into a shared volume — the executor container loads them without needing npm:
+
+```yaml
+spec:
+  plugins:
+    - name: "cc-safety-net"
+    - name: "@nicholasgriffintn/opencode-plugin-otel"
+      options:
+        endpoint: "http://otel-collector:4318"
+```
+
+The controller installs plugins to `/plugins/node_modules/` and merges `file://` paths into the OpenCode `plugin` array. Plugin credentials are provided via `spec.credentials`. See [Plugins](features/plugins.md) for options, templates, and field reference.
+
 ### Concurrency & Quota
 
 Control how many Tasks can run simultaneously and limit task creation rate:

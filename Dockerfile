@@ -35,11 +35,15 @@ FROM alpine:3.23
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-# Install git and ssh client for repository cloning (used by git-init subcommand)
+# Install git, ssh client, and Node.js/npm
+# - git + openssh-client: repository cloning (git-init subcommand)
+# - nodejs + npm: plugin dependency installation (plugin-init subcommand)
 RUN apk add --no-cache \
     git \
     openssh-client \
     tzdata \
+    nodejs \
+    npm \
     && rm -rf /var/cache/apk/*
 
 # Add labels for traceability

@@ -192,11 +192,19 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 		})
 	}
 
-	// Add OpenCode config if provided, or if skills are configured (skills.paths is injected into config)
-	if agentCfg.config != nil || len(agentCfg.skills) > 0 {
+	// Add OpenCode config if provided, or if skills/plugins are configured (injected into config)
+	if agentCfg.config != nil || len(agentCfg.skills) > 0 || hasServerPlugins(agentCfg.plugins) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  OpenCodeConfigEnvVar,
 			Value: OpenCodeConfigPath,
+		})
+	}
+
+	// If TUI plugins are configured, set OPENCODE_TUI_CONFIG env var.
+	if hasTUIPlugins(agentCfg.plugins) {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  OpenCodeTUIConfigEnvVar,
+			Value: OpenCodeTUIConfigPath,
 		})
 	}
 
@@ -411,6 +419,24 @@ func BuildServerDeployment(agent *kubeopenv1alpha1.Agent, agentCfg agentConfig, 
 				})
 			}
 		}
+	}
+
+	// Add plugin-init container and plugins volume if plugins are configured
+	if len(agentCfg.plugins) > 0 {
+		pluginInit := buildPluginInitContainer(agentCfg.plugins, sysCfg)
+		initContainers = append(initContainers, pluginInit)
+
+		volumes = append(volumes, corev1.Volume{
+			Name: PluginsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      PluginsVolumeName,
+			MountPath: DefaultPluginsMountBase,
+			ReadOnly:  true,
+		})
 	}
 
 	// Add GIT_CONFIG_GLOBAL if we have Git mounts
