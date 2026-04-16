@@ -15,7 +15,8 @@ type SemVer struct {
 	Pre   string
 }
 
-// Parse parses a semantic version string (e.g. "v1.2.3" or "1.2.3-beta")
+// Parse parses a semantic version string (e.g. "v1.2.3" or "1.2.3-beta").
+// Both "v"-prefixed and bare version strings are accepted.
 func Parse(v string) (*SemVer, error) {
 	v = strings.TrimPrefix(v, "v")
 	parts := strings.SplitN(v, "-", 2)
@@ -41,6 +42,11 @@ func Parse(v string) (*SemVer, error) {
 	patch, err := strconv.Atoi(segments[2])
 	if err != nil {
 		return nil, fmt.Errorf("invalid patch version: %w", err)
+	}
+
+	// Disallow negative version numbers
+	if major < 0 || minor < 0 || patch < 0 {
+		return nil, fmt.Errorf("invalid semver %q: version numbers must be non-negative", v)
 	}
 
 	return &SemVer{Major: major, Minor: minor, Patch: patch, Pre: pre}, nil
