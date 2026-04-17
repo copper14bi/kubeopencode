@@ -23,6 +23,7 @@ func NewServiceLister(client kubernetes.Interface, namespace string) *ServiceLis
 }
 
 // List returns all services in the configured namespace.
+// Note: uses a label selector limit in the future if lists get too large.
 func (s *ServiceLister) List(ctx context.Context) ([]corev1.Service, error) {
 	list, err := s.client.CoreV1().Services(s.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
