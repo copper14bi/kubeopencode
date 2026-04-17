@@ -63,8 +63,33 @@ func TestVersionCmdShortOutput(t *testing.T) {
 	rootCmd.SetArgs([]string{"version", "--short"})
 	_ = rootCmd.Execute()
 
+	// TrimSpace handles both trailing newline and any extra whitespace
 	output := strings.TrimSpace(buf.String())
 	if output != "v0.9.0" {
 		t.Errorf("expected short output 'v0.9.0', got: %q", output)
+	}
+}
+
+// TestVersionCmdOutputContainsCommit verifies that the full version output
+// also includes the commit hash, which is useful for debugging builds.
+func TestVersionCmdOutputContainsCommit(t *testing.T) {
+	origVersion := Version
+	origCommit := Commit
+	Version = "v1.0.0"
+	Commit = "abc1234"
+	defer func() {
+		Version = origVersion
+		Commit = origCommit
+	}()
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"version"})
+	_ = rootCmd.Execute()
+
+	output := buf.String()
+	if !strings.Contains(output, "abc1234") {
+		t.Errorf("expected output to contain commit 'abc1234', got: %q", output)
 	}
 }
