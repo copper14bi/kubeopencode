@@ -30,6 +30,20 @@ func TestParse_WithPreRelease(t *testing.T) {
 	}
 }
 
+func TestParse_WithPreRelease_RC(t *testing.T) {
+	// Added: also verify rc (release candidate) is treated as pre-release
+	v, err := Parse("v1.0.0-rc1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if v.Pre != "rc1" {
+		t.Errorf("expected pre-release 'rc1', got %q", v.Pre)
+	}
+	if v.IsRelease() {
+		t.Error("expected IsRelease() to be false for rc pre-release version")
+	}
+}
+
 func TestParse_WithoutVPrefix(t *testing.T) {
 	v, err := Parse("3.4.5")
 	if err != nil {
